@@ -11,6 +11,8 @@ mod ssd1306_impl;
 mod button_handling;
 mod millis;
 
+use ssd1306_impl::init_display;
+
 // Perhaps this could be in lib.rs
 pub use display::RenderDisplay;
 #[avr_device::interrupt(atmega328p)]
@@ -25,7 +27,6 @@ fn main() -> ! {
 
     let mut serial = hal::default_serial!(dp, pins, 57600);
 
-    // --- display.begin(SSD1306_SWITCHCAPVCC, 0x3C) ---
     dp.TC0.tccr0a().write(|w| w.wgm0().ctc());
     dp.TC0.ocr0a().write(|w| unsafe { w.bits(249) });
     dp.TC0.tccr0b().write(|w| w.cs0().prescale_64());
@@ -42,36 +43,24 @@ fn main() -> ! {
         50_000,
     );
 
-    let interface = I2CDisplayInterface::new(i2c);
-    let mut display = Ssd1306::new(
-            interface,
-            DisplaySize128x64,
-            DisplayRotation::Rotate0
-        )
-        .into_buffered_graphics_mode();
-        // .into_terminal_mode();
-
     let debug_blink = move |delay_ms: u16, count: u16| -> ! {
         debug::blink_forever(pins.d13.into_output(), delay_ms, count);
     };
 
-    // Give the interface time to initialize.
-    hal::delay_ms(50);
+    let display = match init_display(i2c) {
+        Some(d) => d,
+        None => debug_blink(100, 2),
+    };
 
-    if display.init().is_err() {
-        debug_blink(100, 2);
-    }
+    hal::delay_ms(100);
 
-    // Give the display time to initialize.
-    hal::delay_ms(50);
-
-    // let mut button_tracker = button_handling::ButtonTracker::new();
-    // let button_pressed = pins.a3.is_low();
+    let mut button_tracker = button_handling::ButtonTracker::new();
+    let mut value = 0u32;
 
     // button_tracker.update(button_pressed, 0);
 
     loop {
-        if let Err(delay) = display::render(&mut display, &mut serial, 0, false) {
+        if let Err(delay) = display::render(display, &mut serial, value, button_pressed) {
             debug_blink(delay, 4);
         }
         hal::delay_ms(50);
