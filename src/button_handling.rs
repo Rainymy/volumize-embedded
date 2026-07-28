@@ -1,13 +1,30 @@
 #![allow(unused)]
 
-const DEBOUNCE_MS: u32 = 50;
-const LONG_PRESS_MS: u32 = 500;
+use core::fmt::Display;
+use ufmt::uDisplay;
+
+const DEBOUNCE_MS: u32 = 75;
+const LONG_PRESS_MS: u32 = 300;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ButtonEvent {
     None,
     ShortPress,
     LongPress,
+}
+
+use ufmt::{uWrite, uwrite, Formatter};
+impl uDisplay for ButtonEvent {
+    fn fmt<W>(&self, f: &mut Formatter<W>) -> Result<(), <W as uWrite>::Error>
+    where
+        W: uWrite + ?Sized,
+    {
+        match self {
+            ButtonEvent::None => uwrite!(f, "None"),
+            ButtonEvent::ShortPress => uwrite!(f, "ShortPress"),
+            ButtonEvent::LongPress => uwrite!(f, "LongPress"),
+        }
+    }
 }
 
 pub struct ButtonTracker {
@@ -47,9 +64,7 @@ impl ButtonTracker {
             }
         }
 
-        if self.pressed
-            && !self.long_fired
-            && now.wrapping_sub(self.press_start_ms) > LONG_PRESS_MS
+        if self.pressed && !self.long_fired && now.wrapping_sub(self.press_start_ms) > LONG_PRESS_MS
         {
             self.long_fired = true;
             event = ButtonEvent::LongPress;

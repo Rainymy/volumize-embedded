@@ -59,9 +59,14 @@ fn main() -> ! {
     let mut button_tracker = button_handling::ButtonTracker::new();
     let mut value = 0u32;
 
-    // button_tracker.update(button_pressed, 0);
+    let digital_d4 = pins.d4.into_floating_input();
 
     loop {
+        let button_pressed = digital_d4.is_low();
+        let now = millis::millis();
+
+        let (button_pressed, _button_event) = button_tracker.update(button_pressed, now);
+
         if let Err(delay) = display::render(display, &mut serial, value, button_pressed) {
             debug_blink(delay, 4);
         }
