@@ -11,14 +11,15 @@ test = false
 bench = false
 
 [dependencies]
-panic-halt = "1.0.0"
 ufmt = "0.2.0"
 nb = "1.1.0"
 embedded-hal = "1.0"
+embedded-time = "0.12.1"
 embedded-graphics = "0.8"
 ssd1306 = { version = "0.10.0" }
-heapless = "0.9.3"
-# avr-device = "0.8.1"
+heapless = { version = "0.9.3", features = ["ufmt"] }
+avr-device = "0.8.1"
+fugit = "0.4.0"
 
 [dependencies.arduino-hal]
 git = "https://github.com/rahix/avr-hal"
@@ -35,6 +36,7 @@ features = ["arduino-uno", "rt", "board-selected", "mcu-atmega"]
 panic = "abort"
 lto = true
 opt-level = "s"
+codegen-units = 1
 
 [profile.release]
 panic = "abort"
