@@ -5,15 +5,13 @@
             "cargo": {
                "target": "avr-none",
                "extraEnv": {
-                  // "RUSTFLAGS": "-C target-cpu=atmega328p",
+                  "RUSTFLAGS": "-C target-cpu=atmega328p",
                },
             },
             "procMacro": {
                "enable": true,
             },
-            "diagnostics": {
-               "disabled": ["unresolved-proc-macro", "macro-error"],
-            },
+            "diagnostics": {},
             "check": {
                "allTargets": false,
             },
