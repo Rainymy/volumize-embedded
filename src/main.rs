@@ -66,3 +66,20 @@ fn main() -> ! {
         hal::delay_ms(50);
     }
 }
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    // Steal the peripherals — we don't care about soundness here,
+    // we're crashing anyway, we just want to get a message out.
+    let dp = unsafe { hal::Peripherals::steal() };
+    let pins = hal::pins!(dp);
+    let mut serial = hal::default_serial!(dp, pins, 57600);
+
+    let _ = ufmt::uwriteln!(&mut serial, "PANIC!");
+
+    if let Some(_location) = _info.location() {
+        // let _ = ufmt::uwriteln!(&mut serial, "at {}", _location.line());
+    }
+
+    loop {}
+}
