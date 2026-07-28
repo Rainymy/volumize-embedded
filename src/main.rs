@@ -15,6 +15,8 @@ use ssd1306_impl::init_display;
 
 // Perhaps this could be in lib.rs
 pub use display::RenderDisplay;
+pub mod digits;
+
 #[avr_device::interrupt(atmega328p)]
 fn TIMER0_COMPA() {
     millis::tick()
