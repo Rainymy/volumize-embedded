@@ -13,9 +13,9 @@ bench = false
 [dependencies]
 ufmt = "0.2.0"
 nb = "1.1.0"
-embedded-hal = "1.0"
+embedded-hal = "1.0.0"
 embedded-time = "0.12.1"
-embedded-graphics = "0.8"
+embedded-graphics = "0.8.2"
 ssd1306 = { version = "0.10.0" }
 heapless = { version = "0.9.3", features = ["ufmt"] }
 avr-device = "0.8.1"
