@@ -22,6 +22,19 @@ fn TIMER0_COMPA() {
     millis::tick()
 }
 
+#[avr_device::interrupt(atmega328p)]
+fn INT0() {
+    rotary::update_encoder();
+}
+
+#[avr_device::interrupt(atmega328p)]
+fn INT1() {
+    rotary::update_encoder();
+}
+
+// TODO:
+//  - rotary encoder/button
+
 #[hal::entry]
 fn main() -> ! {
     let dp = hal::Peripherals::take().unwrap();
@@ -34,6 +47,23 @@ fn main() -> ! {
     dp.TC0.tccr0b().write(|w| w.cs0().prescale_64());
     dp.TC0.timsk0().write(|w| w.ocie0a().set_bit());
 
+    // ========== External Interrupts ========
+    dp.EXINT.eicra().write(|w| {
+        w.isc0().val_0x01();
+        w.isc1().val_0x01();
+        w
+    });
+
+    dp.EXINT
+        .eimsk()
+        .write(|w| w.int0().set_bit().int1().set_bit());
+    // =======================================
+
+    let _clk = pins.d2.into_pull_up_input();
+    let _dt = pins.d3.into_pull_up_input();
+    let digital_d4 = pins.d4.into_floating_input();
+
+    rotary::init_rotary(_dt, _clk);
     unsafe {
         avr_device::interrupt::enable();
     }
