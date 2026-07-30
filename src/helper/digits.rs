@@ -1,3 +1,4 @@
+use core::convert::Into;
 use heapless::Vec;
 
 pub fn number_to_vec<const N: usize, T: Into<usize>>(number: T) -> Vec<u8, N> {

@@ -1,5 +1,9 @@
 use ufmt::uWrite;
 
+mod ssd1306_impl;
+
+pub use ssd1306_impl::*;
+
 // RenderDisplay<const N: usize = 12>
 pub trait RenderDisplay {
     fn render<W: uWrite>(

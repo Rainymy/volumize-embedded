@@ -2,20 +2,16 @@
 #![no_std]
 #![no_main]
 
-use arduino_hal as hal;
-
-mod debug;
-mod display;
-mod ssd1306_impl;
-
 mod button_handling;
-mod millis;
+mod display;
+mod rotary;
 
-use ssd1306_impl::init_display;
+use arduino_hal as hal;
+mod helper;
+// use esp_hal as esp;
+use display::init_display;
 
-// Perhaps this could be in lib.rs
-pub use display::RenderDisplay;
-pub mod digits;
+use helper::*;
 
 #[avr_device::interrupt(atmega328p)]
 fn TIMER0_COMPA() {
@@ -35,12 +31,12 @@ fn INT1() {
 // TODO:
 //  - rotary encoder/button
 
-#[hal::entry]
+#[avr_device::entry]
 fn main() -> ! {
+    // let peripherals = esp_hal::init(esp_hal::Config::default());
+
     let dp = hal::Peripherals::take().unwrap();
     let pins = hal::pins!(dp);
-
-    let mut serial = hal::default_serial!(dp, pins, 57600);
 
     dp.TC0.tccr0a().write(|w| w.wgm0().ctc());
     dp.TC0.ocr0a().write(|w| unsafe { w.bits(249) });
@@ -68,6 +64,8 @@ fn main() -> ! {
         avr_device::interrupt::enable();
     }
 
+    let mut serial = hal::default_serial!(dp, pins, 57600);
+
     let i2c = hal::I2c::new(
         dp.TWI,
         pins.a4.into_pull_up_input(),
@@ -75,32 +73,49 @@ fn main() -> ! {
         50_000,
     );
 
+    let d13 = pins.d13.into_output();
+
     let debug_blink = move |delay_ms: u16, count: u16| -> ! {
-        debug::blink_forever(pins.d13.into_output(), delay_ms, count);
+        debug::blink_forever(d13, delay_ms, count);
     };
+
+    let _ = ufmt::uwriteln!(serial, "2");
 
     let display = match init_display(i2c) {
         Some(d) => d,
-        None => debug_blink(100, 2),
+        None => {
+            let _ = ufmt::uwriteln!(serial, "Failed to init display");
+            debug_blink(100, 2);
+        }
     };
+
+    let _ = ufmt::uwriteln!(serial, "3");
 
     hal::delay_ms(100);
 
     let mut button_tracker = button_handling::ButtonTracker::new();
-    let mut value = 0u32;
 
-    let digital_d4 = pins.d4.into_floating_input();
+    let _ = ufmt::uwriteln!(serial, "4");
 
     loop {
+        let _ = ufmt::uwriteln!(serial, "5");
+
         let button_pressed = digital_d4.is_low();
         let now = millis::millis();
 
         let (button_pressed, _button_event) = button_tracker.update(button_pressed, now);
 
+        let _ = ufmt::uwriteln!(serial, "{} - {} - {}", button_pressed, _button_event, now);
+
+        let value = rotary::read_rotation_value() as u32;
+        // let _ = ufmt::uwriteln!(serial, "value: {}", value);
         if let Err(delay) = display::render(display, &mut serial, value, button_pressed) {
             debug_blink(delay, 4);
         }
-        hal::delay_ms(50);
+
+        hal::delay_ms(20);
+
+        let _ = ufmt::uwriteln!(serial, "6");
     }
 }
 

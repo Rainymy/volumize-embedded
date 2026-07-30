@@ -4,9 +4,9 @@
          "initialization_options": {
             "cargo": {
                "target": "avr-none",
-               "extraEnv": {
-                  "RUSTFLAGS": "-C target-cpu=atmega328p",
-               },
+               // "extraEnv": {
+               //    "RUSTFLAGS": "-C target-cpu=atmega328p",
+               // },
             },
             "procMacro": {
                "enable": true,
