@@ -1,43 +1,49 @@
 [package]
-name = "hard_volume"
+name = "volumize-embedded"
 version = "0.1.0"
 authors = ["Rainymy <48211766+Rainymy@users.noreply.github.com>"]
-edition = "2021"
+rust-version = "1.88"
+edition = "2024"
 license = "MIT"
 
 [[bin]]
-name = "hard_volume"
-test = false
-bench = false
+name = "volumize-embedded"
 
 [dependencies]
-ufmt = "0.2.0"
-nb = "1.1.0"
-embedded-hal = "1.0.0"
-embedded-time = "0.12.1"
+esp-hal = { version = "~1.1.1", features = ["defmt", "esp32", "unstable"] }
+esp-alloc = "0.10.0"
+
+esp-rtos = { version = "0.3.0", features = ["defmt", "embassy", "esp32"] }
+
+defmt                  = "1.1.1"
+esp-bootloader-esp-idf = { version = "0.5.0", features = ["defmt", "esp32"] }
+
+embassy-executor = { version = "0.10.0", features = ["defmt"] }
+embassy-time = { version = "0.5.0", features = ["defmt"] }
+esp-backtrace = { version = "0.19.0", features = [
+  "defmt",
+  "esp32",
+  "panic-handler",
+] }
+esp-println = { version = "0.17.0", features = ["defmt-espflash", "esp32"] }
+
+critical-section = { version = "1.2.0", features = [] }
+static_cell      = "2.1.1"
+# ufmt = { version = "0.2.0", features = ["defmt"] }
+# nb = "1.1.0"
+# embedded-hal = "1.0.0"
+# embedded-time = "0.12.1"
 embedded-graphics = "0.8.2"
+heapless = { version = "0.9.3", features = [] }
 ssd1306 = { version = "0.10.0" }
-heapless = { version = "0.9.3", features = ["ufmt"] }
-avr-device = { version = "0.8.1", features = ["rt"] }
-# fugit = "0.4.0"
-# esp32 = "0.40.2"
-# esp-hal = { version = "1.1.1", features = ["esp32"] }
+# avr-device = { version = "0.8.1", features = ["rt"] }
 
-[dependencies.arduino-hal]
-git = "https://github.com/rahix/avr-hal"
-rev = "e5c8f37fe48419956e722490a82b9ca9b9fc61a2"
-features = ["arduino-uno", "rt", "board-selected", "mcu-atmega"]
-
-# Configure the build for minimal size - AVRs have very little program memory
+# For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]
-panic = "abort"
-lto = true
 opt-level = "s"
-codegen-units = 1
 
 [profile.release]
-panic = "abort"
-codegen-units = 1
-debug = true
-lto = true
-opt-level = "s"
+codegen-units = 1     # LLVM can perform better optimizations using a single thread
+debug         = 2     # prefer slower builds but better debugging experience
+lto           = 'fat'
+opt-level     = 's'

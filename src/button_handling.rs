@@ -1,8 +1,5 @@
 #![allow(unused)]
 
-use core::fmt::Display;
-use ufmt::uDisplay;
-
 const DEBOUNCE_MS: u32 = 75;
 const LONG_PRESS_MS: u32 = 300;
 
@@ -11,20 +8,6 @@ pub enum ButtonEvent {
     None,
     ShortPress,
     LongPress,
-}
-
-use ufmt::{uWrite, uwrite, Formatter};
-impl uDisplay for ButtonEvent {
-    fn fmt<W>(&self, f: &mut Formatter<W>) -> Result<(), <W as uWrite>::Error>
-    where
-        W: uWrite + ?Sized,
-    {
-        match self {
-            ButtonEvent::None => uwrite!(f, "None"),
-            ButtonEvent::ShortPress => uwrite!(f, "ShortPress"),
-            ButtonEvent::LongPress => uwrite!(f, "LongPress"),
-        }
-    }
 }
 
 pub struct ButtonTracker {

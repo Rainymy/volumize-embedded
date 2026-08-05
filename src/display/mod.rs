@@ -1,29 +1,15 @@
-use ufmt::uWrite;
-
 mod ssd1306_impl;
 
 pub use ssd1306_impl::*;
 
-// RenderDisplay<const N: usize = 12>
 pub trait RenderDisplay {
-    fn render<W: uWrite>(
-        &mut self,
-        serial: &mut W,
-        value: u32,
-        button_pressed: bool,
-    ) -> Result<(), u16>;
+    fn render(&mut self, value: u16, button_pressed: bool) -> Result<(), u16>;
 }
 
 #[allow(unused)]
-pub fn render<D, W>(
-    display: &mut D,
-    serial: &mut W,
-    _value: u32,
-    _button_pressed: bool,
-) -> Result<(), u16>
+pub fn render<D>(display: &mut D, value: u16, button_pressed: bool) -> Result<(), u16>
 where
     D: RenderDisplay,
-    W: uWrite,
 {
-    display.render(serial, _value, _button_pressed)
+    display.render(value, button_pressed)
 }

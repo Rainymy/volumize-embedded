@@ -3,17 +3,16 @@
       "rust-analyzer": {
          "initialization_options": {
             "cargo": {
-               "target": "avr-none",
-               // "extraEnv": {
-               //    "RUSTFLAGS": "-C target-cpu=atmega328p",
-               // },
-            },
-            "procMacro": {
-               "enable": true,
-            },
-            "diagnostics": {},
-            "check": {
                "allTargets": false,
+               "target": "xtensa-esp32-none-elf",
+               "extraEnv": {
+                  "RUSTUP_TOOLCHAIN": "esp",
+               },
+            },
+            "server": {
+               "extraEnv": {
+                  "RUSTUP_TOOLCHAIN": "stable",
+               },
             },
          },
       },

@@ -1,9 +1,14 @@
-[build]
-target = "avr-none"
-rustflags = ["-C", "target-cpu=atmega328p"]
+# [target.'cfg(any(target_arch = "riscv32", target_arch = "xtensa"))']
+[target.xtensa-esp32-none-elf]
+runner = "espflash flash --monitor --chip esp32 --log-format defmt"
 
-[target.'cfg(target_arch = "avr")']
-runner = "ravedude"
+[env]
+DEFMT_LOG="info"
+
+[build]
+rustflags = ["-C", "link-arg=-nostartfiles"]
+
+target = "xtensa-esp32-none-elf"
 
 [unstable]
-build-std = ["core"]
+build-std = ["core", "alloc"]

@@ -1,121 +1,92 @@
-#![feature(abi_avr_interrupt)]
 #![no_std]
 #![no_main]
+#![deny(
+    clippy::mem_forget,
+    reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
+    holding buffers for the duration of a data transfer."
+)]
+#![deny(clippy::large_stack_frames)]
+
+extern crate alloc;
+
+use esp_hal::clock::CpuClock;
+use esp_hal::interrupt::software::SoftwareInterruptControl;
+use esp_hal::timer::timg::TimerGroup;
+
+use embassy_executor::Spawner;
+// use embassy_time::{Duration, Timer};
+
+use defmt::info;
+use esp_println as _;
+
+use esp_backtrace as _;
 
 mod button_handling;
 mod display;
-mod rotary;
-
-use arduino_hal as hal;
 mod helper;
-// use esp_hal as esp;
-use display::init_display;
+// mod rotary;
 
-use helper::*;
+use display::{init_display, render};
 
-#[avr_device::interrupt(atmega328p)]
-fn TIMER0_COMPA() {
-    millis::tick()
-}
+// This creates a default app-descriptor required by the esp-idf bootloader.
+// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
+esp_bootloader_esp_idf::esp_app_desc!();
 
-#[avr_device::interrupt(atmega328p)]
-fn INT0() {
-    rotary::update_encoder();
-}
+// #[allow(
+//     clippy::large_stack_frames,
+//     reason = "it's not unusual to allocate larger buffers etc. in main"
+// )]
+#[esp_rtos::main]
+async fn main(_spawner: Spawner) -> ! {
+    esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
 
-#[avr_device::interrupt(atmega328p)]
-fn INT1() {
-    rotary::update_encoder();
-}
+    // Create peripherals and configure CPU clock.
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let peripherals = esp_hal::init(config);
 
-// TODO:
-//  - rotary encoder/button
+    // Setup timers and software interrupts.
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    let sw_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
-#[avr_device::entry]
-fn main() -> ! {
-    // let peripherals = esp_hal::init(esp_hal::Config::default());
+    info!("Embassy initialized!");
+    // rotary::init_rotary(_dt, _clk);
 
-    let dp = hal::Peripherals::take().unwrap();
-    let pins = hal::pins!(dp);
+    use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 
-    dp.TC0.tccr0a().write(|w| w.wgm0().ctc());
-    dp.TC0.ocr0a().write(|w| unsafe { w.bits(249) });
-    dp.TC0.tccr0b().write(|w| w.cs0().prescale_64());
-    dp.TC0.timsk0().write(|w| w.ocie0a().set_bit());
+    let i2c_config = I2cConfig::default();
+    let i2c = I2c::new(peripherals.I2C0, i2c_config)
+        .expect("I2C Failed")
+        .with_scl(peripherals.GPIO0)
+        .with_sda(peripherals.GPIO1);
 
-    // ========== External Interrupts ========
-    dp.EXINT.eicra().write(|w| {
-        w.isc0().val_0x01();
-        w.isc1().val_0x01();
-        w
-    });
-
-    dp.EXINT
-        .eimsk()
-        .write(|w| w.int0().set_bit().int1().set_bit());
-    // =======================================
-
-    let _clk = pins.d2.into_pull_up_input();
-    let _dt = pins.d3.into_pull_up_input();
-    let digital_d4 = pins.d4.into_floating_input();
-
-    rotary::init_rotary(_dt, _clk);
-    unsafe {
-        avr_device::interrupt::enable();
-    }
-
-    let mut serial = hal::default_serial!(dp, pins, 57600);
-
-    let i2c = hal::I2c::new(
-        dp.TWI,
-        pins.a4.into_pull_up_input(),
-        pins.a5.into_pull_up_input(),
-        50_000,
-    );
-
-    let d13 = pins.d13.into_output();
-
-    let debug_blink = move |delay_ms: u16, count: u16| -> ! {
-        debug::blink_forever(d13, delay_ms, count);
+    let debug_blink = move |_delay_ms: u16, _count: u16| -> ! {
+        loop {}
+        // debug::blink_forever(peripherals.GPIO13, delay_ms, count);
     };
-
-    let _ = ufmt::uwriteln!(serial, "2");
 
     let display = match init_display(i2c) {
         Some(d) => d,
-        None => {
-            let _ = ufmt::uwriteln!(serial, "Failed to init display");
-            debug_blink(100, 2);
-        }
+        None => debug_blink(100, 2),
     };
 
-    let _ = ufmt::uwriteln!(serial, "3");
-
-    hal::delay_ms(100);
-
     let mut button_tracker = button_handling::ButtonTracker::new();
-
-    let _ = ufmt::uwriteln!(serial, "4");
+    let value = 0;
+    let (rx, _tx) = unsafe { peripherals.GPIO13.split() };
 
     loop {
-        let _ = ufmt::uwriteln!(serial, "5");
-
-        let button_pressed = digital_d4.is_low();
-        let now = millis::millis();
+        // let now = millis::millis();
+        let button_pressed = !rx.is_input_high();
+        let now = 0;
 
         let (button_pressed, _button_event) = button_tracker.update(button_pressed, now);
 
-        let _ = ufmt::uwriteln!(serial, "{} - {} - {}", button_pressed, _button_event, now);
-
-        let value = rotary::read_rotation_value() as u32;
+        // let value = rotary::read_rotation_value() as u32;
         // let _ = ufmt::uwriteln!(serial, "value: {}", value);
-        if let Err(delay) = display::render(display, &mut serial, value, button_pressed) {
+
+        if let Err(delay) = render(display, value, button_pressed) {
             debug_blink(delay, 4);
         }
-
-        hal::delay_ms(20);
-
-        let _ = ufmt::uwriteln!(serial, "6");
     }
 }
 
