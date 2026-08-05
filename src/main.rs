@@ -77,19 +77,11 @@ async fn main(_spawner: Spawner) -> ! {
         .with_scl(peripherals.GPIO0)
         .with_sda(peripherals.GPIO1);
 
-    let debug_blink = move |_delay_ms: u16, _count: u16| -> ! {
-        loop {}
-        // debug::blink_forever(peripherals.GPIO13, delay_ms, count);
-    };
-
     // use esp_hal::interrupt::{InterruptHandler, Priority, bind_handler};
     // let handler = InterruptHandler::new(|| rotary::handle_rotary_interrupt(), Priority::min());
     // bind_handler(gpio, handler);
 
-    let display = match init_display(i2c) {
-        Some(d) => d,
-        None => debug_blink(100, 2),
-    };
+    let display = init_display(i2c).expect("Display failed to initialize!!");
 
     let mut button_tracker = button_handling::ButtonTracker::new();
     let (rx, _tx) = unsafe { peripherals.GPIO13.split() };
@@ -99,26 +91,10 @@ async fn main(_spawner: Spawner) -> ! {
         let button_pressed = !rx.is_input_high();
 
         let (button_pressed, _button_event) = button_tracker.poll(button_pressed, now);
-
         let value = rotary::read_rotation_value() as u16;
-        // let _ = ufmt::uwriteln!(serial, "value: {}", value);
 
         if let Err(delay) = render(display, value, button_pressed) {
-            debug_blink(delay, 4);
+            info!("render error from render: {}", delay);
         }
     }
 }
-
-// #[panic_handler]
-// fn panic(_info: &core::panic::PanicInfo) -> ! {
-//     // Steal the peripherals — we don't care about soundness here,
-//     // we're crashing anyway, we just want to get a message out.
-//     let dp = unsafe { hal::Peripherals::steal() };
-//     let pins = hal::pins!(dp);
-//     let mut serial = hal::default_serial!(dp, pins, 57600);
-//     let _ = ufmt::uwriteln!(&mut serial, "PANIC!");
-//     if let Some(_location) = _info.location() {
-//         // let _ = ufmt::uwriteln!(&mut serial, "at {}", _location.line());
-//     }
-//     loop {}
-// }
