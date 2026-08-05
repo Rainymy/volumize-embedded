@@ -9,9 +9,9 @@
 
 extern crate alloc;
 
-use esp_hal::clock::CpuClock;
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::timer::timg::TimerGroup;
+use esp_hal::{clock::CpuClock, rtc_cntl};
 
 use embassy_executor::Spawner;
 // use embassy_time::{Duration, Timer};
@@ -49,6 +49,8 @@ async fn main(_spawner: Spawner) -> ! {
     let sw_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
+    // Real Time Clock
+    let rtc = rtc_cntl::Rtc::new(peripherals.LPWR);
     info!("Embassy initialized!");
     // rotary::init_rotary(_dt, _clk);
 
@@ -75,9 +77,8 @@ async fn main(_spawner: Spawner) -> ! {
     let (rx, _tx) = unsafe { peripherals.GPIO13.split() };
 
     loop {
-        // let now = millis::millis();
+        let now = rtc.current_time_us();
         let button_pressed = !rx.is_input_high();
-        let now = 0;
 
         let (button_pressed, _button_event) = button_tracker.update(button_pressed, now);
 
