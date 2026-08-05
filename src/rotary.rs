@@ -27,47 +27,66 @@ const TRANSITION_TABLE: [[u8; 4]; 7] = [
     [R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START],
 ];
 
-const VALUE_MIN: i32 = 0;
-const VALUE_MAX: i32 = 100;
-const STEPS_PER_CLICK: i32 = 1;
+type RotaryType = i8;
+const VALUE_MIN: RotaryType = 0;
+const VALUE_MAX: RotaryType = 100;
+const STEPS_PER_CLICK: RotaryType = 1;
 
 // ================= Shared state (ISR <-> main) =================
-use avr_device::interrupt::Mutex;
 use core::cell::Cell;
+use critical_section::Mutex;
 
 static ROT_STATE: Mutex<Cell<u8>> = Mutex::new(Cell::new(R_START));
-static COUNTER: Mutex<Cell<i32>> = Mutex::new(Cell::new(10));
+static COUNTER: Mutex<Cell<RotaryType>> = Mutex::new(Cell::new(10));
 
-use arduino_hal::hal::port::{PD2, PD3};
-use arduino_hal::port::{
-    mode::{Input, PullUp},
-    Pin,
-};
+use esp_hal::gpio::{AnyPin, Input};
 
-type DtPin = Pin<Input<PullUp>, PD3>;
-type ClkPin = Pin<Input<PullUp>, PD2>;
+type DtPin = AnyPin<'static>;
+type ClkPin = AnyPin<'static>;
+type SDtPin = Input<'static>;
+type SClkPin = Input<'static>;
 
-static DT_PIN: Mutex<Cell<Option<DtPin>>> = Mutex::new(Cell::new(None));
-static CLK_PIN: Mutex<Cell<Option<ClkPin>>> = Mutex::new(Cell::new(None));
+static DT_PIN: Mutex<Cell<Option<SDtPin>>> = Mutex::new(Cell::new(None));
+static CLK_PIN: Mutex<Cell<Option<SClkPin>>> = Mutex::new(Cell::new(None));
 
 pub fn init_rotary(dt_pin: DtPin, clk_pin: ClkPin) {
-    avr_device::interrupt::free(|cs| {
+    critical_section::with(|cs| {
+        use esp_hal::gpio::{Event, InputConfig, Pull};
+
+        let input_config = InputConfig::default().with_pull(Pull::Up);
+        let mut dt_pin = Input::new(dt_pin, input_config);
+        let mut clk_pin = Input::new(clk_pin, input_config);
+
+        dt_pin.listen(Event::AnyEdge);
+        clk_pin.listen(Event::AnyEdge);
+
         DT_PIN.borrow(cs).set(Some(dt_pin));
         CLK_PIN.borrow(cs).set(Some(clk_pin));
     });
 }
 
-pub fn read_rotation_value() -> i32 {
-    avr_device::interrupt::free(|cs| COUNTER.borrow(cs).get())
+pub fn read_rotation_value() -> RotaryType {
+    critical_section::with(|cs| COUNTER.borrow(cs).get())
 }
 
+/**
+ * Honestly I have no idea why this works or what it does.
+ * Just trusting that it has no edge cases.
+ */
 pub fn update_encoder() {
-    avr_device::interrupt::free(|cs| {
-        let dt_pin = DT_PIN.borrow(cs).take().unwrap();
+    critical_section::with(|cs| {
+        // TODO: Needs better type or way. Instead of taking and setting.
+        let dt_pin = DT_PIN
+            .borrow(cs)
+            .take()
+            .expect("DT_PIN is not set; call `init_rotary`");
         let dt = dt_pin.is_high() as u8;
         DT_PIN.borrow(cs).set(Some(dt_pin));
 
-        let clk_pin = CLK_PIN.borrow(cs).take().unwrap();
+        let clk_pin = CLK_PIN
+            .borrow(cs)
+            .take()
+            .expect("CLK_PIN is not set; call `init_rotary`");
         let clk = clk_pin.is_high() as u8;
         CLK_PIN.borrow(cs).set(Some(clk_pin));
 
