@@ -1,7 +1,9 @@
 #![allow(unused)]
 
-const DEBOUNCE_MS: u32 = 75;
-const LONG_PRESS_MS: u32 = 300;
+type Timestamp = u64;
+
+const DEBOUNCE_MS: Timestamp = 75;
+const LONG_PRESS_MS: Timestamp = 300;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ButtonEvent {
@@ -12,8 +14,8 @@ pub enum ButtonEvent {
 
 pub struct ButtonTracker {
     pressed: bool,
-    last_change_ms: u32,
-    press_start_ms: u32,
+    last_change_ms: Timestamp,
+    press_start_ms: Timestamp,
     long_fired: bool,
 }
 
@@ -29,7 +31,7 @@ impl ButtonTracker {
 
     /// Returns (state_changed, event). `raw_pressed` is true when the pin
     /// reads LOW (button pulled to ground when pressed).
-    pub fn update(&mut self, raw_pressed: bool, now: u32) -> (bool, ButtonEvent) {
+    pub fn poll(&mut self, raw_pressed: bool, now: Timestamp) -> (bool, ButtonEvent) {
         let mut changed = false;
         let mut event = ButtonEvent::None;
 
