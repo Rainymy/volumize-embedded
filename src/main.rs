@@ -24,13 +24,19 @@ use esp_backtrace as _;
 mod button_handling;
 mod display;
 mod helper;
-// mod rotary;
+mod rotary;
 
 use display::{init_display, render};
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
+
+#[allow(dead_code)]
+#[esp_hal::handler]
+fn rotary_handler() {
+    rotary::update_encoder();
+}
 
 // #[allow(
 //     clippy::large_stack_frames,
@@ -49,10 +55,19 @@ async fn main(_spawner: Spawner) -> ! {
     let sw_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
+    // Setting up interrupt GPIO pins.
+    use esp_hal::gpio::Pin;
+    let dt_pin = peripherals.GPIO16.degrade();
+    let clk_pin = peripherals.GPIO17.degrade();
+    rotary::init_rotary(dt_pin, clk_pin);
+
     // Real Time Clock
     let rtc = rtc_cntl::Rtc::new(peripherals.LPWR);
     info!("Embassy initialized!");
-    // rotary::init_rotary(_dt, _clk);
+
+    use esp_hal::interrupt;
+    let gpio = esp_hal::peripherals::Interrupt::GPIO;
+    interrupt::enable(gpio, interrupt::Priority::min());
 
     use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 
@@ -67,22 +82,25 @@ async fn main(_spawner: Spawner) -> ! {
         // debug::blink_forever(peripherals.GPIO13, delay_ms, count);
     };
 
+    // use esp_hal::interrupt::{InterruptHandler, Priority, bind_handler};
+    // let handler = InterruptHandler::new(|| rotary::handle_rotary_interrupt(), Priority::min());
+    // bind_handler(gpio, handler);
+
     let display = match init_display(i2c) {
         Some(d) => d,
         None => debug_blink(100, 2),
     };
 
     let mut button_tracker = button_handling::ButtonTracker::new();
-    let value = 0;
     let (rx, _tx) = unsafe { peripherals.GPIO13.split() };
 
     loop {
         let now = rtc.current_time_us();
         let button_pressed = !rx.is_input_high();
 
-        let (button_pressed, _button_event) = button_tracker.update(button_pressed, now);
+        let (button_pressed, _button_event) = button_tracker.poll(button_pressed, now);
 
-        // let value = rotary::read_rotation_value() as u32;
+        let value = rotary::read_rotation_value() as u16;
         // let _ = ufmt::uwriteln!(serial, "value: {}", value);
 
         if let Err(delay) = render(display, value, button_pressed) {
@@ -91,19 +109,16 @@ async fn main(_spawner: Spawner) -> ! {
     }
 }
 
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    // Steal the peripherals — we don't care about soundness here,
-    // we're crashing anyway, we just want to get a message out.
-    let dp = unsafe { hal::Peripherals::steal() };
-    let pins = hal::pins!(dp);
-    let mut serial = hal::default_serial!(dp, pins, 57600);
-
-    let _ = ufmt::uwriteln!(&mut serial, "PANIC!");
-
-    if let Some(_location) = _info.location() {
-        // let _ = ufmt::uwriteln!(&mut serial, "at {}", _location.line());
-    }
-
-    loop {}
-}
+// #[panic_handler]
+// fn panic(_info: &core::panic::PanicInfo) -> ! {
+//     // Steal the peripherals — we don't care about soundness here,
+//     // we're crashing anyway, we just want to get a message out.
+//     let dp = unsafe { hal::Peripherals::steal() };
+//     let pins = hal::pins!(dp);
+//     let mut serial = hal::default_serial!(dp, pins, 57600);
+//     let _ = ufmt::uwriteln!(&mut serial, "PANIC!");
+//     if let Some(_location) = _info.location() {
+//         // let _ = ufmt::uwriteln!(&mut serial, "at {}", _location.line());
+//     }
+//     loop {}
+// }
