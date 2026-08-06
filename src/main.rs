@@ -26,6 +26,7 @@ mod display;
 mod helper;
 mod rotary;
 
+use button_handling::ButtonTracker;
 use display::{init_display, render};
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
@@ -65,12 +66,12 @@ async fn main(_spawner: Spawner) -> ! {
     let rtc = rtc_cntl::Rtc::new(peripherals.LPWR);
     info!("Embassy initialized!");
 
-    use esp_hal::interrupt;
-    let gpio = esp_hal::peripherals::Interrupt::GPIO;
-    interrupt::enable(gpio, interrupt::Priority::min());
+    // Enable GPIO interrupts.
+    use esp_hal::{interrupt, peripherals as prs};
+    interrupt::enable(prs::Interrupt::GPIO, interrupt::Priority::min());
 
+    // Setup I2C communication.
     use esp_hal::i2c::master::{Config as I2cConfig, I2c};
-
     let i2c_config = I2cConfig::default();
     let i2c = I2c::new(peripherals.I2C0, i2c_config)
         .expect("I2C Failed")
@@ -81,9 +82,10 @@ async fn main(_spawner: Spawner) -> ! {
     // let handler = InterruptHandler::new(|| rotary::handle_rotary_interrupt(), Priority::min());
     // bind_handler(gpio, handler);
 
+    // Initialize the display with I2C communication.
     let display = init_display(i2c).expect("Display failed to initialize!!");
 
-    let mut button_tracker = button_handling::ButtonTracker::new();
+    let mut button_tracker = ButtonTracker::new();
     let (rx, _tx) = unsafe { peripherals.GPIO13.split() };
 
     loop {
