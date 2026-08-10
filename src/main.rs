@@ -9,17 +9,12 @@
 
 extern crate alloc;
 
-use esp_hal::interrupt::software::SoftwareInterruptControl;
-use esp_hal::timer::timg::TimerGroup;
-use esp_hal::{clock::CpuClock, rtc_cntl};
-
 use embassy_executor::Spawner;
 // use embassy_time::{Duration, Timer};
 
 use defmt::info;
-use esp_println as _;
-
 use esp_backtrace as _;
+use esp_println as _;
 
 mod button_handling;
 mod display;
@@ -47,6 +42,15 @@ fn rotary_handler() {
 async fn main(_spawner: Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
 
+    use esp_hal::{
+        clock::CpuClock,
+        gpio::Pin,
+        i2c::master::{Config as I2cConfig, I2c},
+        interrupt::{self, software::SoftwareInterruptControl},
+        peripherals as prs, rtc_cntl,
+        timer::timg::TimerGroup,
+    };
+
     // Create peripherals and configure CPU clock.
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
@@ -57,7 +61,6 @@ async fn main(_spawner: Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
     // Setting up interrupt GPIO pins.
-    use esp_hal::gpio::Pin;
     let dt_pin = peripherals.GPIO16.degrade();
     let clk_pin = peripherals.GPIO17.degrade();
     rotary::init_rotary(dt_pin, clk_pin);
@@ -67,11 +70,9 @@ async fn main(_spawner: Spawner) -> ! {
     info!("Embassy initialized!");
 
     // Enable GPIO interrupts.
-    use esp_hal::{interrupt, peripherals as prs};
     interrupt::enable(prs::Interrupt::GPIO, interrupt::Priority::min());
 
     // Setup I2C communication.
-    use esp_hal::i2c::master::{Config as I2cConfig, I2c};
     let i2c_config = I2cConfig::default();
     let i2c = I2c::new(peripherals.I2C0, i2c_config)
         .expect("I2C Failed")
