@@ -76,18 +76,20 @@ pub fn read_rotation_value() -> RotaryType {
 pub fn update_encoder() {
     critical_section::with(|cs| {
         // TODO: Needs better type or way. Instead of taking and setting.
-        let dt_pin = DT_PIN
+        let mut dt_pin = DT_PIN
             .borrow(cs)
             .take()
             .expect("DT_PIN is not set; call `init_rotary`");
         let dt = dt_pin.is_high() as u8;
+        dt_pin.clear_interrupt();
         DT_PIN.borrow(cs).set(Some(dt_pin));
 
-        let clk_pin = CLK_PIN
+        let mut clk_pin = CLK_PIN
             .borrow(cs)
             .take()
             .expect("CLK_PIN is not set; call `init_rotary`");
         let clk = clk_pin.is_high() as u8;
+        clk_pin.clear_interrupt();
         CLK_PIN.borrow(cs).set(Some(clk_pin));
 
         let pin_state = (clk << 1) | dt;
