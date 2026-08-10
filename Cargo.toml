@@ -2,41 +2,40 @@
 name = "volumize-embedded"
 version = "0.1.0"
 authors = ["Rainymy <48211766+Rainymy@users.noreply.github.com>"]
-rust-version = "1.88"
 edition = "2024"
+rust-version = "1.88"
 license = "MIT"
 
 [[bin]]
 name = "volumize-embedded"
 
 [dependencies]
-esp-hal = { version = "~1.1.1", features = ["defmt", "esp32s3", "unstable"] }
-esp-alloc = { version = "0.10.0", features = ["esp32s3"] }
+# Hardware Abstraction Layer / Chip Support
+esp-hal                = { version = "~1.1.1", features = ["esp32s3", "defmt", "unstable"] }
+esp-alloc              = { version = "0.10.0", features = ["esp32s3"] }
+esp-rtos               = { version = "0.3.0",  features = ["esp32s3", "defmt", "embassy"] }
+esp-bootloader-esp-idf = { version = "0.5.0",  features = ["esp32s3", "defmt"] }
 
-esp-rtos = { version = "0.3.0", features = ["defmt", "embassy", "esp32s3"] }
-
-defmt                  = "1.1.1"
-esp-bootloader-esp-idf = { version = "0.5.0", features = ["defmt", "esp32s3"] }
-
+# Async Runtime
 embassy-executor = { version = "0.10.0", features = ["defmt"] }
-embassy-time = { version = "0.5.0", features = ["defmt"] }
-esp-backtrace = { version = "0.19.0", features = [
-  "defmt",
-  "esp32s3",
-  "panic-handler",
-] }
-esp-println = { version = "0.17.0", features = ["defmt-espflash", "esp32s3"] }
+embassy-time     = { version = "0.5.0",  features = ["defmt"] }
 
-critical-section = { version = "1.2.0", features = [] }
-static_cell      = "2.1.1"
-# ufmt = { version = "0.2.0", features = ["defmt"] }
-# nb = "1.1.0"
-# embedded-hal = "1.0.0"
-# embedded-time = "0.12.1"
-embedded-graphics = "0.8.2"
-heapless = { version = "0.9.3", features = [] }
-ssd1306 = { version = "0.10.0" }
-# avr-device = { version = "0.8.1", features = ["rt"] }
+# Debugging / Logging
+defmt         = { version = "1.1.1" }
+esp-backtrace = { version = "0.19.0", features = ["esp32s3", "defmt", "panic-handler"] }
+esp-println   = { version = "0.17.0", features = ["esp32s3", "defmt-espflash"] }
+
+# Utilities
+critical-section = { version = "1.2.0" }
+static_cell      = { version = "2.1.1" }
+heapless         = { version = "0.9.3" }
+
+# Display & Graphics
+embedded-graphics = { version = "0.8.2" }
+ssd1306           = { version = "0.10.0" }
+
+# UI Framework
+# buoyant = "0.7.0"
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]
