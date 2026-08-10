@@ -28,11 +28,13 @@ use display::{init_display, render};
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
 
-#[allow(dead_code)]
-#[esp_hal::handler]
-fn rotary_handler() {
+extern "C" fn rotary_handler() {
     rotary::update_encoder();
 }
+
+use esp_hal::interrupt::{InterruptHandler, Priority};
+#[allow(unused)]
+const ROTARY_HANDLER: InterruptHandler = InterruptHandler::new(rotary_handler, Priority::min());
 
 // #[allow(
 //     clippy::large_stack_frames,
