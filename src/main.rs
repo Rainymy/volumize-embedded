@@ -49,7 +49,7 @@ async fn main(_spawner: Spawner) -> ! {
         gpio::Pin,
         i2c::master::{Config as I2cConfig, I2c},
         interrupt::{self, software::SoftwareInterruptControl},
-        peripherals as prs, rtc_cntl,
+        rtc_cntl,
         timer::timg::TimerGroup,
     };
 
@@ -72,7 +72,11 @@ async fn main(_spawner: Spawner) -> ! {
     info!("Embassy initialized!");
 
     // Enable GPIO interrupts.
-    interrupt::enable(prs::Interrupt::GPIO, interrupt::Priority::min());
+    {
+        use esp_hal::peripherals as phrs;
+        interrupt::bind_handler(phrs::Interrupt::GPIO, ROTARY_HANDLER);
+        // interrupt::enable(phrs::Interrupt::GPIO, Priority::min());
+    }
 
     // Setup I2C communication.
     let i2c_config = I2cConfig::default();
@@ -80,10 +84,6 @@ async fn main(_spawner: Spawner) -> ! {
         .expect("I2C Failed")
         .with_scl(peripherals.GPIO0)
         .with_sda(peripherals.GPIO1);
-
-    // use esp_hal::interrupt::{InterruptHandler, Priority, bind_handler};
-    // let handler = InterruptHandler::new(|| rotary::handle_rotary_interrupt(), Priority::min());
-    // bind_handler(gpio, handler);
 
     // Initialize the display with I2C communication.
     let display = init_display(i2c).expect("Display failed to initialize!!");
