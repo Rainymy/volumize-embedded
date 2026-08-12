@@ -23,8 +23,8 @@ use esp_hal::Blocking;
 pub type DisplayI2c<'a> = esp_hal::i2c::master::I2c<'a, Blocking>;
 pub type DisplayInterface<'a> = I2CInterface<DisplayI2c<'a>>;
 
-pub type GraphicsMode = BufferedGraphicsMode<DisplaySize128x64>;
-// pub type GraphicsMode = TerminalMode;
+// pub type GraphicsMode = BufferedGraphicsMode<DisplaySize128x64>;
+pub type GraphicsMode = TerminalMode;
 pub type DisplayType = Ssd1306<DisplayInterface<'static>, DisplaySize128x64, GraphicsMode>;
 
 use super::RenderDisplay;
@@ -35,8 +35,8 @@ pub fn init_display(i2c: DisplayI2c<'static>) -> Option<&'static mut DisplayType
     let interface = I2CDisplayInterface::new(i2c);
 
     let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
-        .into_buffered_graphics_mode();
-    // .into_terminal_mode();
+        // .into_buffered_graphics_mode();
+        .into_terminal_mode();
 
     // Give the interface time to initialize.
     esp_hal::delay::Delay::new().delay_millis(20);
@@ -67,8 +67,6 @@ where
             return Err(100);
         }
 
-        // arduino_hal::delay_ms(50);
-
         let top = FONT_5X8.character_size.height;
         let style = MonoTextStyleBuilder::new()
             .font(&FONT_5X8)
@@ -92,8 +90,10 @@ where
         //     return Err(500);
         // }
 
+        let value_str = format!("Volume: {}", _value);
+
         // This is for sanity check.
-        if Text::new("volume 6", Point::new(0, top as i32), style)
+        if Text::new(&value_str, Point::new(0, top as i32), style)
             .draw(self)
             .is_err()
         {
@@ -126,12 +126,19 @@ where
         }
 
         let _ = self.clear();
+        // let _ = self.set_position(0, 0);
 
         let _digits = format!("volume: {}", value);
-        info!("[info] volume: {}", value);
+        info!("Volume: {}", _digits.as_str());
 
-        let _ = self.write_str(&_digits);
-        let _ = self.set_position(2, 2);
+        // Write full string does not work, it only displays the last character.
+        // let _ = self.write_str(&_digits);
+        // Instead, we write each character individually. Works around the issue.
+        for c in _digits.as_bytes() {
+            let bind = &[*c];
+            let _ = self.write_str(unsafe { core::str::from_utf8_unchecked(bind) });
+        }
+        let _ = self.set_position(2, 1);
 
         for c in 33..123 {
             let bind = &[c];

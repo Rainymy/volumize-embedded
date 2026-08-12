@@ -1,2 +1,3 @@
 # default baudrate = 115200
-baudrate = 460800
+# baudrate = 460800
+baudrate = 115200

@@ -81,7 +81,7 @@ pub fn update_encoder() {
             .take()
             .expect("DT_PIN is not set; call `init_rotary`");
         let dt = dt_pin.is_high() as u8;
-        dt_pin.clear_interrupt();
+        dt_pin.clear_interrupt(); // Dont forget to clear the interrupt
         DT_PIN.borrow(cs).set(Some(dt_pin));
 
         let mut clk_pin = CLK_PIN
@@ -89,7 +89,7 @@ pub fn update_encoder() {
             .take()
             .expect("CLK_PIN is not set; call `init_rotary`");
         let clk = clk_pin.is_high() as u8;
-        clk_pin.clear_interrupt();
+        clk_pin.clear_interrupt(); // Dont forget to clear the interrupt
         CLK_PIN.borrow(cs).set(Some(clk_pin));
 
         let pin_state = (clk << 1) | dt;

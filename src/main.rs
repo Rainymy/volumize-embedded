@@ -32,7 +32,16 @@ extern "C" fn rotary_handler() {
     rotary::update_encoder();
 }
 
-use esp_hal::interrupt::{InterruptHandler, Priority};
+use esp_hal::{
+    Config as MCUConfig,
+    clock::CpuClock,
+    gpio::Pin,
+    i2c::master::{Config as I2cConfig, I2c},
+    interrupt::{InterruptHandler, Priority, software::SoftwareInterruptControl},
+    rtc_cntl,
+    timer::timg::TimerGroup,
+};
+
 #[allow(unused)]
 const ROTARY_HANDLER: InterruptHandler = InterruptHandler::new(rotary_handler, Priority::min());
 
@@ -44,17 +53,8 @@ const ROTARY_HANDLER: InterruptHandler = InterruptHandler::new(rotary_handler, P
 async fn main(_spawner: Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
 
-    use esp_hal::{
-        clock::CpuClock,
-        gpio::Pin,
-        i2c::master::{Config as I2cConfig, I2c},
-        interrupt::{self, software::SoftwareInterruptControl},
-        rtc_cntl,
-        timer::timg::TimerGroup,
-    };
-
     // Create peripherals and configure CPU clock.
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let config = MCUConfig::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
     // Setup timers and software interrupts.
@@ -63,8 +63,8 @@ async fn main(_spawner: Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
     // Setting up interrupt GPIO pins.
-    let dt_pin = peripherals.GPIO16.degrade();
-    let clk_pin = peripherals.GPIO17.degrade();
+    let dt_pin = peripherals.GPIO36.degrade();
+    let clk_pin = peripherals.GPIO40.degrade();
     rotary::init_rotary(dt_pin, clk_pin);
 
     // Real Time Clock
@@ -73,23 +73,26 @@ async fn main(_spawner: Spawner) -> ! {
 
     // Enable GPIO interrupts.
     {
-        use esp_hal::peripherals as phrs;
+        use esp_hal::{interrupt, peripherals as phrs};
         interrupt::bind_handler(phrs::Interrupt::GPIO, ROTARY_HANDLER);
-        // interrupt::enable(phrs::Interrupt::GPIO, Priority::min());
+        interrupt::enable(phrs::Interrupt::GPIO, Priority::min());
     }
 
     // Setup I2C communication.
     let i2c_config = I2cConfig::default();
     let i2c = I2c::new(peripherals.I2C0, i2c_config)
         .expect("I2C Failed")
-        .with_scl(peripherals.GPIO0)
-        .with_sda(peripherals.GPIO1);
+        .with_scl(peripherals.GPIO4)
+        .with_sda(peripherals.GPIO5);
 
     // Initialize the display with I2C communication.
-    let display = init_display(i2c).expect("Display failed to initialize!!");
+    let display = defmt::expect!(
+        init_display(i2c),
+        "Display not initialized or Not Connected"
+    );
 
     let mut button_tracker = ButtonTracker::new();
-    let (rx, _tx) = unsafe { peripherals.GPIO13.split() };
+    let (rx, _tx) = unsafe { peripherals.GPIO35.split() };
 
     loop {
         let now = rtc.current_time_us();
