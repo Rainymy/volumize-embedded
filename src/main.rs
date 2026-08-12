@@ -16,22 +16,6 @@ use defmt::info;
 use esp_backtrace as _;
 use esp_println as _;
 
-mod button_handling;
-mod display;
-mod helper;
-mod rotary;
-
-use button_handling::ButtonTracker;
-use display::{init_display, render};
-
-// This creates a default app-descriptor required by the esp-idf bootloader.
-// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
-esp_bootloader_esp_idf::esp_app_desc!();
-
-extern "C" fn rotary_handler() {
-    rotary::update_encoder();
-}
-
 use esp_hal::{
     Config as MCUConfig,
     clock::CpuClock,
@@ -41,6 +25,20 @@ use esp_hal::{
     rtc_cntl,
     timer::timg::TimerGroup,
 };
+
+mod button_handling;
+mod display;
+mod helper;
+mod rotary;
+
+use button_handling::ButtonTracker;
+use display::{init_display, render};
+
+esp_bootloader_esp_idf::esp_app_desc!();
+
+extern "C" fn rotary_handler() {
+    rotary::update_encoder();
+}
 
 #[allow(unused)]
 const ROTARY_HANDLER: InterruptHandler = InterruptHandler::new(rotary_handler, Priority::min());
@@ -75,7 +73,7 @@ async fn main(_spawner: Spawner) -> ! {
     {
         use esp_hal::{interrupt, peripherals as phrs};
         interrupt::bind_handler(phrs::Interrupt::GPIO, ROTARY_HANDLER);
-        interrupt::enable(phrs::Interrupt::GPIO, Priority::min());
+        // interrupt::enable(phrs::Interrupt::GPIO, Priority::min());
     }
 
     // Setup I2C communication.
@@ -92,17 +90,27 @@ async fn main(_spawner: Spawner) -> ! {
     );
 
     let mut button_tracker = ButtonTracker::new();
+    let mut last_button_state = button_tracker.poll(false, 0);
     let (rx, _tx) = unsafe { peripherals.GPIO35.split() };
 
     loop {
         let now = rtc.current_time_us();
         let button_pressed = !rx.is_input_high();
 
-        let (button_pressed, _button_event) = button_tracker.poll(button_pressed, now);
         let value = rotary::read_rotation_value() as u16;
+        let button_state = button_tracker.poll(button_pressed, now);
+        if button_state.event != last_button_state.event {
+            info!(
+                "Button pressed: {} - event: {:?}",
+                button_state.is_pressed, button_state.event
+            );
+            last_button_state = button_state.clone();
+        }
 
-        if let Err(delay) = render(display, value, button_pressed) {
+        if let Err(delay) = render(display, value, button_state) {
             info!("render error from render: {}", delay);
         }
+
+        esp_hal::delay::Delay::new().delay_millis(20);
     }
 }
