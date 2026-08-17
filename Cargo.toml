@@ -28,10 +28,11 @@ esp-println   = { version = "0.17.0", features = ["esp32s3", "defmt-espflash"] }
 # Utilities
 critical-section = { version = "1.2.0" }
 static_cell      = { version = "2.1.1" }
-heapless         = { version = "0.9.3" }
+# heapless         = { version = "0.9.3" }
 
 # Display & Graphics
 embedded-graphics = { version = "0.8.2" }
+embedded-hal      = { version = "1.0.0" }
 ssd1306           = { version = "0.10.0" }
 
 # UI Framework

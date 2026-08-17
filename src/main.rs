@@ -28,11 +28,11 @@ use esp_hal::{
 
 mod button_handling;
 mod display;
-mod helper;
+mod init_display;
 mod rotary;
 
 use button_handling::ButtonTracker;
-use display::{init_display, render};
+use display::render;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -67,6 +67,7 @@ async fn main(_spawner: Spawner) -> ! {
 
     // Real Time Clock
     let rtc = rtc_cntl::Rtc::new(peripherals.LPWR);
+    let delay = esp_hal::delay::Delay::new();
     info!("Embassy initialized!");
 
     // Enable GPIO interrupts.
@@ -85,7 +86,7 @@ async fn main(_spawner: Spawner) -> ! {
 
     // Initialize the display with I2C communication.
     let display = defmt::expect!(
-        init_display(i2c),
+        init_display::init_display(i2c),
         "Display not initialized or Not Connected"
     );
 
@@ -97,7 +98,7 @@ async fn main(_spawner: Spawner) -> ! {
         let now = rtc.current_time_us();
         let button_pressed = !rx.is_input_high();
 
-        let value = rotary::read_rotation_value() as u16;
+        let value = rotary::read_rotation_value() / 100.0;
         let button_state = button_tracker.poll(button_pressed, now);
         if button_state.event != last_button_state.event {
             info!(
@@ -107,10 +108,10 @@ async fn main(_spawner: Spawner) -> ! {
             last_button_state = button_state.clone();
         }
 
-        if let Err(delay) = render(display, value, button_state) {
+        if let Err(delay) = render(display, value.into(), button_state) {
             info!("render error from render: {}", delay);
         }
 
-        esp_hal::delay::Delay::new().delay_millis(20);
+        delay.delay_millis(20);
     }
 }

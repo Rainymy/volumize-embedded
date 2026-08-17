@@ -1,15 +1,20 @@
+mod percentage;
 mod ssd1306_impl;
+mod style;
 
-pub use ssd1306_impl::*;
+pub use percentage::*;
+pub use style::*;
 
-use crate::button_handling::ButtonEvent;
+// pub use ssd1306_impl::*;
+
+use super::button_handling::ButtonEvent;
 
 pub trait RenderDisplay {
-    fn render(&mut self, value: u16, button_state: ButtonEvent) -> Result<(), u16>;
+    fn render(&mut self, value: f32, button_state: ButtonEvent) -> Result<(), u16>;
 }
 
 #[allow(unused)]
-pub fn render<D>(display: &mut D, value: u16, button_state: ButtonEvent) -> Result<(), u16>
+pub fn render<D>(display: &mut D, value: f32, button_state: ButtonEvent) -> Result<(), u16>
 where
     D: RenderDisplay,
 {

@@ -27,17 +27,17 @@ const TRANSITION_TABLE: [[u8; 4]; 7] = [
     [R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START],
 ];
 
-type RotaryType = i8;
-const VALUE_MIN: RotaryType = 0;
-const VALUE_MAX: RotaryType = 100;
-const STEPS_PER_CLICK: RotaryType = 1;
+type RotaryType = f32;
+const VALUE_MIN: RotaryType = 0.0;
+const VALUE_MAX: RotaryType = 100.0;
+const STEPS_PER_CLICK: RotaryType = 1.0;
 
 // ================= Shared state (ISR <-> main) =================
 use core::cell::Cell;
 use critical_section::Mutex;
 
 static ROT_STATE: Mutex<Cell<u8>> = Mutex::new(Cell::new(R_START));
-static COUNTER: Mutex<Cell<RotaryType>> = Mutex::new(Cell::new(10));
+static COUNTER: Mutex<Cell<RotaryType>> = Mutex::new(Cell::new(10.0));
 
 use esp_hal::gpio::{AnyPin, Input};
 
