@@ -112,7 +112,6 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     }
 }
 
-mod vtype;
 use alloc::vec::Vec;
 use esp_hal::otg_fs::Usb;
 
@@ -161,7 +160,7 @@ async fn usb_task(usb: Usb<'static>) {
                     if !payload.is_empty() {
                         let packet_buf = &payload[..];
 
-                        let devices: Vec<vtype::AudioDevice> =
+                        let devices: Vec<shared_types::AudioDevice> =
                             match ciborium::from_reader(packet_buf) {
                                 Ok(t) => t,
                                 Err(e) => {

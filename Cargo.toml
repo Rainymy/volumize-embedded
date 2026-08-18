@@ -10,6 +10,8 @@ license = "MIT"
 name = "volumize-embedded"
 
 [dependencies]
+shared-types = { path = "./shared-types" }
+
 # Hardware Abstraction Layer / Chip Support
 esp-hal                = { version = "~1.1.1", features = ["esp32s3", "defmt", "unstable"] }
 esp-alloc              = { version = "0.10.0", features = ["esp32s3"] }
