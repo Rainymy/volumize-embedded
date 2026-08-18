@@ -16,9 +16,15 @@ esp-alloc              = { version = "0.10.0", features = ["esp32s3"] }
 esp-rtos               = { version = "0.3.0",  features = ["esp32s3", "defmt", "embassy"] }
 esp-bootloader-esp-idf = { version = "0.5.0",  features = ["esp32s3", "defmt"] }
 
+# USB
+usb-device  = { version = "0.3.2", features = ["defmt"] }
+usbd-serial = { version = "0.2.2" }
+
 # Async Runtime
 embassy-executor = { version = "0.10.0", features = ["defmt"] }
 embassy-time     = { version = "0.5.0",  features = ["defmt"] }
+embassy-usb      = { version = "0.6.0",  features = ["defmt"] }
+embassy-futures  = { version = "0.1.2",  features = ["defmt"] }
 
 # Debugging / Logging
 defmt         = { version = "1.1.1" }
@@ -28,7 +34,6 @@ esp-println   = { version = "0.17.0", features = ["esp32s3", "defmt-espflash"] }
 # Utilities
 critical-section = { version = "1.2.0" }
 static_cell      = { version = "2.1.1" }
-# heapless         = { version = "0.9.3" }
 
 # Display & Graphics
 embedded-graphics = { version = "0.8.2" }

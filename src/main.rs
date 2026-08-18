@@ -9,8 +9,7 @@
 
 extern crate alloc;
 
-use embassy_executor::Spawner;
-// use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Ticker};
 
 use defmt::info;
 use esp_backtrace as _;
@@ -112,6 +111,6 @@ async fn main(_spawner: Spawner) -> ! {
             info!("render error from render: {}", delay);
         }
 
-        delay.delay_millis(20);
+        embassy_time::Timer::after_millis(20).await;
     }
 }
