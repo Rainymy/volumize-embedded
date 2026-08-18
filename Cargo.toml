@@ -35,6 +35,11 @@ esp-println   = { version = "0.17.0", features = ["esp32s3", "defmt-espflash"] }
 critical-section = { version = "1.2.0" }
 static_cell      = { version = "2.1.1" }
 
+# Serialization & Deserialization
+serde            = { version = "1.0.229", default-features = false }
+ciborium         = { version = "0.2.2",   default-features = false }
+ciborium-io      = { version = "0.2.2",   default-features = false }
+
 # Display & Graphics
 embedded-graphics = { version = "0.8.2" }
 embedded-hal      = { version = "1.0.0" }

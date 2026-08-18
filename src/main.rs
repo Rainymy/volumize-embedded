@@ -19,7 +19,6 @@ use esp_hal::{
     gpio::Pin,
     i2c::master::{Config as I2cConfig, I2c},
     interrupt::{InterruptHandler, Priority, software::SoftwareInterruptControl},
-    otg_fs::Usb,
     rtc_cntl,
     timer::timg::TimerGroup,
 };
@@ -62,9 +61,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
     match usb_task(usb) {
         Ok(task) => spawner.spawn(task),
-        Err(e) => {
-            panic!("Failed to spawn usb task: {:?}", e);
-        }
+        Err(e) => defmt::panic!("Failed to spawn usb task: {:?}", e),
     };
     info!("Embassy initialized!");
 
@@ -107,13 +104,17 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             last_button_state = button_state.clone();
         }
 
-        if let Err(delay) = render(display, value.into(), button_state) {
+        if let Err(delay) = render(display, value, button_state) {
             info!("render error from render: {}", delay);
         }
 
         embassy_time::Timer::after_millis(20).await;
     }
 }
+
+mod vtype;
+use alloc::vec::Vec;
+use esp_hal::otg_fs::Usb;
 
 #[embassy_executor::task]
 async fn usb_task(usb: Usb<'static>) {
@@ -153,20 +154,35 @@ async fn usb_task(usb: Usb<'static>) {
             class.wait_connection().await;
             info!("USB connected");
 
-            let mut buf = [0u8; 64];
-            loop {
-                match class.read_packet(&mut buf).await {
-                    Ok(count) => {
-                        info!("read {} bytes", count);
-                        if count > 0 {
-                            let data = &buf[..count];
-                            info!("data: {}", data);
+            let payload = read_frame(&mut class).await;
+            match payload {
+                Ok(payload) => {
+                    info!("read {} bytes", payload.len());
+                    if !payload.is_empty() {
+                        let packet_buf = &payload[..];
+
+                        let devices: Vec<vtype::AudioDevice> =
+                            match ciborium::from_reader(packet_buf) {
+                                Ok(t) => t,
+                                Err(e) => {
+                                    use alloc::string::ToString;
+                                    info!("{}", e.to_string().as_str());
+                                    continue;
+                                }
+                            };
+
+                        for device in devices {
+                            info!("Payload: {}", device.name.as_str());
                         }
                     }
-                    Err(error) => {
-                        info!("read error: {}", error);
-                        break;
-                    }
+                }
+                Err(error) => {
+                    // if let EndpointError::BufferOverflow = error {
+                    //     info!("Failed to read packet, buffer overflowed");
+                    //     continue;
+                    // }
+                    info!("read error: {}", error);
+                    break;
                 }
             }
             info!("USB disconnected");
@@ -174,4 +190,47 @@ async fn usb_task(usb: Usb<'static>) {
     };
 
     embassy_futures::join::join(usb_future, echo_future).await;
+}
+
+use embassy_usb::{class::cdc_acm::CdcAcmClass, driver::EndpointError};
+use esp_hal::otg_fs::asynch::Driver;
+
+async fn read_frame<'a>(class: &mut CdcAcmClass<'a, Driver<'a>>) -> Result<Vec<u8>, EndpointError> {
+    use alloc::vec;
+
+    const MAX_FRAME_LEN: usize = 1024;
+    let mut packet_buf = vec![0u8; class.max_packet_size() as usize];
+
+    let mut len_buf = [0u8; 2];
+    let mut len_have = 0;
+
+    // Extract length (2 bytes) from the packet
+    while len_have < 2 {
+        let n = class.read_packet(&mut packet_buf).await?;
+        for &b in &packet_buf[..n] {
+            if len_have < 2 {
+                len_buf[len_have] = b;
+                len_have += 1;
+            }
+        }
+    }
+
+    // Decode frame length
+    let frame_len = u16::from_le_bytes(len_buf) as usize;
+    if frame_len > MAX_FRAME_LEN {
+        return Err(EndpointError::BufferOverflow); // reject oversized/garbage frame
+    }
+
+    let mut payload = Vec::new();
+
+    // Keep reading packets until we have accumulated the full payload
+    while payload.len() < frame_len {
+        let n = class.read_packet(&mut packet_buf).await?;
+        let remaining = frame_len - payload.len();
+        // In case it reads more than we need, take only the remaining bytes
+        let take = n.min(remaining);
+        payload.extend_from_slice(&packet_buf[..take]);
+    }
+
+    Ok(payload)
 }
