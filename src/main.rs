@@ -9,8 +9,6 @@
 
 extern crate alloc;
 
-use embassy_time::{Duration, Ticker};
-
 use defmt::info;
 use esp_backtrace as _;
 use esp_println as _;
@@ -119,7 +117,10 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
 
 #[embassy_executor::task]
 async fn usb_task(usb: Usb<'static>) {
-    use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
+    use embassy_usb::{
+        Builder, Config as UsbConfig,
+        class::cdc_acm::{CdcAcmClass, State},
+    };
     use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
     use static_cell::StaticCell;
 
@@ -129,22 +130,12 @@ async fn usb_task(usb: Usb<'static>) {
     static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
     static STATE: StaticCell<State> = StaticCell::new();
 
-    // use alloc::string::String;
-    // static BASE_MAC: StaticCell<String> = StaticCell::new();
-
-    // use esp_hal::efuse::base_mac_address;
-    // let mac_str = base_mac_address()
-    //     .as_bytes()
-    //     .iter()
-    //     .fold(String::new(), |acc, byte| format!("{acc}{:X}", byte));
-
-    let mut config = embassy_usb::Config::new(0x1209, 0x0001);
+    let mut config = UsbConfig::new(0x1209, 0x0001);
     config.manufacturer = Some("Volumize");
-    config.product = Some("Volumize USB");
-    // config.serial_number = Some(BASE_MAC.init(mac_str));
+    config.product = Some("Volumize Hardware");
     config.serial_number = Some("VMZE:01");
 
-    let mut builder = embassy_usb::Builder::new(
+    let mut builder = Builder::new(
         Driver::new(usb, EP_OUT_BUFFER.init([0u8; 256]), OtgConfig::default()),
         config,
         CONFIG_DESC.init([0u8; 256]),
@@ -153,18 +144,13 @@ async fn usb_task(usb: Usb<'static>) {
         CONTROL_BUF.init([0u8; 64]),
     );
 
-    let state = STATE.init(State::new());
-    let mut class = CdcAcmClass::new(&mut builder, state, 64);
-
+    let mut class = CdcAcmClass::new(&mut builder, STATE.init(State::new()), 64);
     let mut usb_device = builder.build();
-    let mut ticker = Ticker::every(Duration::from_millis(1));
 
     let usb_future = usb_device.run();
-
     let echo_future = async {
         loop {
             class.wait_connection().await;
-            ticker.next().await;
             info!("USB connected");
 
             let mut buf = [0u8; 64];
@@ -179,9 +165,11 @@ async fn usb_task(usb: Usb<'static>) {
                     }
                     Err(error) => {
                         info!("read error: {}", error);
+                        break;
                     }
                 }
             }
+            info!("USB disconnected");
         }
     };
 
