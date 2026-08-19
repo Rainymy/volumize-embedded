@@ -40,40 +40,46 @@ extern "C" fn rotary_handler() {
 #[esp_rtos::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
+    info!("Embassy initialized!");
 
     // Create peripherals and configure CPU clock.
     let config = MCUConfig::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
+    info!("CPU clock configured!");
 
     // Setup RTOS.
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+    info!("RTOS scheduler started!");
 
     // Setup rotary encoder.
     let dt_pin = peripherals.GPIO36.degrade();
     let clk_pin = peripherals.GPIO40.degrade();
     rotary::init_rotary(dt_pin, clk_pin);
+    info!("Rotary encoder initialized!");
 
     // Real Time Clock
     let rtc = rtc_cntl::Rtc::new(peripherals.LPWR);
 
+    // USB CDC-ACM - Serial over USB
     let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
     match usb_task(usb) {
         Ok(task) => spawner.spawn(task),
         Err(e) => defmt::panic!("Failed to spawn usb task: {:?}", e),
     };
-    info!("Embassy initialized!");
 
     // Enable GPIO interrupts.
     {
         use esp_hal::{interrupt, peripherals as phrs};
         let rotary_handler = InterruptHandler::new(rotary_handler, Priority::min());
         interrupt::bind_handler(phrs::Interrupt::GPIO, rotary_handler);
+        info!("Bind GPIO interrupt handler");
         // interrupt::enable(phrs::Interrupt::GPIO, Priority::min());
     }
 
     // Setup I2C communication.
+    info!("Setup I2C communication");
     let i2c_config = I2cConfig::default();
     let i2c = I2c::new(peripherals.I2C0, i2c_config)
         .expect("I2C Failed")
@@ -81,6 +87,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
         .with_sda(peripherals.GPIO5);
 
     // Initialize the display with I2C communication.
+    info!("Initialize the display");
     let display = defmt::expect!(
         init_display::init_display(i2c),
         "Display not initialized or Not Connected"
@@ -90,6 +97,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut last_button_state = button_tracker.poll(false, 0);
     let (rx, _tx) = unsafe { peripherals.GPIO35.split() };
 
+    info!("Entering main loop");
     loop {
         let now = rtc.current_time_us();
         let button_pressed = !rx.is_input_high();
@@ -123,6 +131,8 @@ async fn usb_task(usb: Usb<'static>) {
     };
     use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
     use static_cell::StaticCell;
+
+    info!("USB Task started");
 
     static EP_OUT_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
     static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
@@ -189,6 +199,8 @@ async fn usb_task(usb: Usb<'static>) {
     };
 
     embassy_futures::join::join(usb_future, echo_future).await;
+
+    info!("USB Task finished");
 }
 
 use embassy_usb::{class::cdc_acm::CdcAcmClass, driver::EndpointError};
