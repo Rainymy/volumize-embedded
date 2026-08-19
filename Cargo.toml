@@ -6,9 +6,6 @@ edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 
-[[bin]]
-name = "volumize-embedded"
-
 [dependencies]
 shared-types = { path = "./shared-types" }
 
