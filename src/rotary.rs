@@ -27,29 +27,44 @@ const TRANSITION_TABLE: [[u8; 4]; 7] = [
     [R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START],
 ];
 
-type RotaryType = f32;
-const VALUE_MIN: RotaryType = 0.0;
-const VALUE_MAX: RotaryType = 100.0;
-const STEPS_PER_CLICK: RotaryType = 1.0;
+const STEPS_PER_CLICK: RotaryType = RotaryType(1.0);
+
+#[derive(Debug, Clone, Copy)]
+struct RotaryType(f32);
+impl RotaryType {
+    pub const VALUE_MIN: f32 = 0.0;
+    pub const VALUE_MAX: f32 = 100.0;
+
+    fn limit_bound(value: f32) -> f32 {
+        value.clamp(Self::VALUE_MIN, Self::VALUE_MAX)
+    }
+
+    pub fn value(&self) -> f32 {
+        self.0
+    }
+
+    pub fn saturating_add(&self, other: Self) -> Self {
+        RotaryType(Self::limit_bound(self.0 + other.0))
+    }
+
+    pub fn saturating_sub(&self, other: Self) -> Self {
+        RotaryType(Self::limit_bound(self.0 - other.0))
+    }
+}
 
 // ================= Shared state (ISR <-> main) =================
-use core::cell::Cell;
-use critical_section::Mutex;
-
-static ROT_STATE: Mutex<Cell<u8>> = Mutex::new(Cell::new(R_START));
-static COUNTER: Mutex<Cell<RotaryType>> = Mutex::new(Cell::new(10.0));
-
+use core::cell::{Cell, RefCell};
+use critical_section::{CriticalSection, Mutex};
 use esp_hal::gpio::{AnyPin, Input};
 
-type DtPin = AnyPin<'static>;
-type ClkPin = AnyPin<'static>;
-type SDtPin = Input<'static>;
-type SClkPin = Input<'static>;
+static ROT_STATE: Mutex<Cell<u8>> = Mutex::new(Cell::new(R_START));
+static COUNTER: Mutex<Cell<RotaryType>> = Mutex::new(Cell::new(RotaryType(10.0)));
 
-static DT_PIN: Mutex<Cell<Option<SDtPin>>> = Mutex::new(Cell::new(None));
-static CLK_PIN: Mutex<Cell<Option<SClkPin>>> = Mutex::new(Cell::new(None));
+type SetPin<T> = Mutex<RefCell<Option<T>>>;
+static DT_PIN: SetPin<Input<'static>> = Mutex::new(RefCell::new(None));
+static CLK_PIN: SetPin<Input<'static>> = Mutex::new(RefCell::new(None));
 
-pub fn init_rotary(dt_pin: DtPin, clk_pin: ClkPin) {
+pub fn init_rotary(dt_pin: AnyPin<'static>, clk_pin: AnyPin<'static>) {
     critical_section::with(|cs| {
         use esp_hal::gpio::{Event, InputConfig, Pull};
 
@@ -60,13 +75,32 @@ pub fn init_rotary(dt_pin: DtPin, clk_pin: ClkPin) {
         dt_pin.listen(Event::AnyEdge);
         clk_pin.listen(Event::AnyEdge);
 
-        DT_PIN.borrow(cs).set(Some(dt_pin));
-        CLK_PIN.borrow(cs).set(Some(clk_pin));
+        DT_PIN.borrow(cs).replace(Some(dt_pin));
+        CLK_PIN.borrow(cs).replace(Some(clk_pin));
     });
 }
 
-pub fn read_rotation_value() -> RotaryType {
-    critical_section::with(|cs| COUNTER.borrow(cs).get())
+/// Reading value is capped between [VALUE_MIN] - [VALUE_MAX]
+pub fn read_rotation_value() -> f32 {
+    critical_section::with(|cs| COUNTER.borrow(cs).get().value())
+}
+
+/// Reads a pin's current level as 0/1 and clears its pending interrupt.
+/// Must be called from inside a `critical_section`.
+fn read_and_clear(cs: CriticalSection, pin: &SetPin<Input<'static>>) -> u8 {
+    let mut guard = pin.borrow_ref_mut(cs);
+
+    match guard.as_mut() {
+        Some(pin) => {
+            let level = pin.is_high() as u8;
+            pin.clear_interrupt();
+            level
+        }
+        None => {
+            defmt::warn!("pin is not set; call `{}`", stringify!(init_rotary));
+            0
+        }
+    }
 }
 
 /**
@@ -75,23 +109,8 @@ pub fn read_rotation_value() -> RotaryType {
  */
 pub fn update_encoder() {
     critical_section::with(|cs| {
-        // TODO: Needs better type or way. Instead of taking and setting.
-        let mut dt_pin = DT_PIN
-            .borrow(cs)
-            .take()
-            .expect("DT_PIN is not set; call `init_rotary`");
-        let dt = dt_pin.is_high() as u8;
-        dt_pin.clear_interrupt(); // Dont forget to clear the interrupt
-        DT_PIN.borrow(cs).set(Some(dt_pin));
-
-        let mut clk_pin = CLK_PIN
-            .borrow(cs)
-            .take()
-            .expect("CLK_PIN is not set; call `init_rotary`");
-        let clk = clk_pin.is_high() as u8;
-        clk_pin.clear_interrupt(); // Dont forget to clear the interrupt
-        CLK_PIN.borrow(cs).set(Some(clk_pin));
-
+        let dt = read_and_clear(cs, &DT_PIN);
+        let clk = read_and_clear(cs, &CLK_PIN);
         let pin_state = (clk << 1) | dt;
 
         let state_cell = ROT_STATE.borrow(cs);
@@ -101,14 +120,11 @@ pub fn update_encoder() {
 
         let result = new_state & 0x30;
         let counter_cell = COUNTER.borrow(cs);
-        let mut counter = counter_cell.get();
 
-        if result == DIR_CW && counter < VALUE_MAX {
-            counter += STEPS_PER_CLICK;
-        } else if result == DIR_CCW && counter > VALUE_MIN {
-            counter -= STEPS_PER_CLICK;
-        }
-
-        counter_cell.set(counter);
+        counter_cell.set(match result {
+            DIR_CW => counter_cell.get().saturating_add(STEPS_PER_CLICK),
+            DIR_CCW => counter_cell.get().saturating_sub(STEPS_PER_CLICK),
+            _ => counter_cell.get(),
+        });
     });
 }
