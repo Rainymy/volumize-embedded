@@ -33,10 +33,6 @@ use display::render;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
-extern "C" fn rotary_handler() {
-    rotary::update_encoder();
-}
-
 #[esp_rtos::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
@@ -62,6 +58,9 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     // Real Time Clock
     let rtc = rtc_cntl::Rtc::new(peripherals.LPWR);
 
+    // Enable GPIO interrupts.
+    enable_gpio_interrupts();
+
     // USB CDC-ACM - Serial over USB
     let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
     match usb_task(usb) {
@@ -69,20 +68,10 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
         Err(e) => defmt::panic!("Failed to spawn usb task: {:?}", e),
     };
 
-    // Enable GPIO interrupts.
-    {
-        use esp_hal::{interrupt, peripherals as phrs};
-        let rotary_handler = InterruptHandler::new(rotary_handler, Priority::min());
-        interrupt::bind_handler(phrs::Interrupt::GPIO, rotary_handler);
-        info!("Bind GPIO interrupt handler");
-        // interrupt::enable(phrs::Interrupt::GPIO, Priority::min());
-    }
-
     // Setup I2C communication.
     info!("Setup I2C communication");
     let i2c_config = I2cConfig::default();
-    let i2c = I2c::new(peripherals.I2C0, i2c_config)
-        .expect("I2C Failed")
+    let i2c = defmt::expect!(I2c::new(peripherals.I2C0, i2c_config), "I2C Failed")
         .with_scl(peripherals.GPIO4)
         .with_sda(peripherals.GPIO5);
 
@@ -118,6 +107,19 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
 
         embassy_time::Timer::after_millis(20).await;
     }
+}
+
+// Enable GPIO interrupts.
+fn enable_gpio_interrupts() {
+    extern "C" fn rotary_handler() {
+        rotary::update_encoder();
+    }
+
+    use esp_hal::{interrupt, peripherals::Interrupt};
+    interrupt::bind_handler(
+        Interrupt::GPIO,
+        InterruptHandler::new(rotary_handler, Priority::min()),
+    );
 }
 
 use alloc::vec::Vec;
@@ -186,10 +188,6 @@ async fn usb_task(usb: Usb<'static>) {
                     }
                 }
                 Err(error) => {
-                    // if let EndpointError::BufferOverflow = error {
-                    //     info!("Failed to read packet, buffer overflowed");
-                    //     continue;
-                    // }
                     info!("read error: {}", error);
                     break;
                 }
@@ -212,19 +210,25 @@ async fn read_frame<'a>(class: &mut CdcAcmClass<'a, Driver<'a>>) -> Result<Vec<u
     const MAX_FRAME_LEN: usize = 1024;
     let mut packet_buf = vec![0u8; class.max_packet_size() as usize];
 
-    let mut len_buf = [0u8; 2];
+    let mut header_buf = [0u8; 3];
     let mut len_have = 0;
 
     // Extract length (2 bytes) from the packet
-    while len_have < 2 {
+    while len_have < header_buf.len() {
         let n = class.read_packet(&mut packet_buf).await?;
         for &b in &packet_buf[..n] {
-            if len_have < 2 {
-                len_buf[len_have] = b;
+            if len_have < header_buf.len() {
+                header_buf[len_have] = b;
                 len_have += 1;
             }
+            // What if the host sends more than 3 bytes?
         }
     }
+
+    let len_buf = header_buf[..2].try_into().unwrap();
+    // Convert type byte to an concrete type.
+    // if shared_types::AudioDevice == 1, type_int will be 1, otherwise 0
+    let _type_int = header_buf[3] as usize;
 
     // Decode frame length
     let frame_len = u16::from_le_bytes(len_buf) as usize;
