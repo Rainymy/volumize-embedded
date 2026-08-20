@@ -735,6 +735,7 @@ checksum = "46ced060d4085858283df950b80a4da2348e1707d7d07b1e966308582dae79f5"
 dependencies = [
  "allocator-api2",
  "cfg-if",
+ "defmt 1.1.1",
  "document-features",
  "enumset",
  "esp-config",

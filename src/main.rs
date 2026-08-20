@@ -18,7 +18,7 @@ use esp_hal::{
     clock::CpuClock,
     gpio::Pin,
     i2c::master::{Config as I2cConfig, I2c},
-    interrupt::{InterruptHandler, Priority, software::SoftwareInterruptControl},
+    interrupt::{InterruptHandler, software::SoftwareInterruptControl},
     rtc_cntl,
     timer::timg::TimerGroup,
 };
@@ -36,6 +36,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 #[esp_rtos::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
+
     info!("Embassy initialized!");
 
     // Create peripherals and configure CPU clock.
@@ -90,14 +91,15 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     loop {
         let now = rtc.current_time_us();
         let button_pressed = !rx.is_input_high();
-
         let value = rotary::read_rotation_value() / 100.0;
+
         let button_state = button_tracker.poll(button_pressed, now);
         if button_state.event != last_button_state.event {
             info!(
                 "Button pressed: {} - event: {:?}",
                 button_state.is_pressed, button_state.event
             );
+            // info!("{}", esp_alloc::HEAP.stats());
             last_button_state = button_state.clone();
         }
 
@@ -111,14 +113,12 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
 
 // Enable GPIO interrupts.
 fn enable_gpio_interrupts() {
-    extern "C" fn rotary_handler() {
-        rotary::update_encoder();
-    }
+    use esp_hal::{interrupt, interrupt::Priority, peripherals::Interrupt};
+    use rotary::update_encoder;
 
-    use esp_hal::{interrupt, peripherals::Interrupt};
     interrupt::bind_handler(
         Interrupt::GPIO,
-        InterruptHandler::new(rotary_handler, Priority::min()),
+        InterruptHandler::new(update_encoder, Priority::min()),
     );
 }
 

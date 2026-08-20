@@ -107,7 +107,7 @@ fn read_and_clear(cs: CriticalSection, pin: &SetPin<Input<'static>>) -> u8 {
  * Honestly I have no idea why this works or what it does.
  * Just trusting that it has no edge cases.
  */
-pub fn update_encoder() {
+pub extern "C" fn update_encoder() {
     critical_section::with(|cs| {
         let dt = read_and_clear(cs, &DT_PIN);
         let clk = read_and_clear(cs, &CLK_PIN);
