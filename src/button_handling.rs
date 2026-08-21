@@ -14,6 +14,8 @@ pub enum ButtonPressState {
     LongPress,
 }
 
+use super::navigation::{Button, InputEvent};
+
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub struct ButtonEvent {
     pub is_pressed: bool,
@@ -39,15 +41,15 @@ impl ButtonTracker {
 
     /// Returns (state_changed, event). `raw_pressed` is true when the pin
     /// reads LOW (button pulled to ground when pressed).
-    pub fn poll(&mut self, raw_pressed: bool, now: Timestamp) -> ButtonEvent {
+    pub fn poll(&mut self, raw_pressed: bool, now_ms: Timestamp) -> Option<InputEvent> {
         let mut event = ButtonPressState::None;
 
-        if raw_pressed != self.pressed && now.wrapping_sub(self.last_change_ms) > DEBOUNCE_MS {
+        if raw_pressed != self.pressed && now_ms.wrapping_sub(self.last_change_ms) > DEBOUNCE_MS {
             self.pressed = raw_pressed;
-            self.last_change_ms = now;
+            self.last_change_ms = now_ms;
 
             if self.pressed {
-                self.press_start_ms = now;
+                self.press_start_ms = now_ms;
                 self.long_fired = false;
             } else if !self.long_fired {
                 // released before the long-press threshold -> short press
@@ -55,15 +57,18 @@ impl ButtonTracker {
             }
         }
 
-        if self.pressed && !self.long_fired && now.wrapping_sub(self.press_start_ms) > LONG_PRESS_MS
+        if self.pressed
+            && !self.long_fired
+            && now_ms.wrapping_sub(self.press_start_ms) > LONG_PRESS_MS
         {
             self.long_fired = true;
             event = ButtonPressState::LongPress;
         }
 
-        ButtonEvent {
-            is_pressed: raw_pressed,
-            event: event,
+        match event {
+            ButtonPressState::None => None,
+            ButtonPressState::ShortPress => Some(InputEvent::ShortPress(Button::Select)),
+            ButtonPressState::LongPress => Some(InputEvent::LongPress(Button::DoubleClick)),
         }
     }
 }

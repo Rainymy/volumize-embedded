@@ -27,11 +27,14 @@ use esp_hal::{
 mod button_handling;
 mod display;
 mod init_display;
+mod navigation;
 mod rotary;
 mod usb;
 
 use button_handling::ButtonTracker;
 use display::render;
+
+use crate::navigation::Screen;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -87,8 +90,10 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     );
 
     let mut button_tracker = ButtonTracker::new();
-    let mut last_button_state = button_tracker.poll(false, 0);
+    let mut _last_button_state = button_tracker.poll(false, 0);
     let (rx, _tx) = unsafe { peripherals.GPIO35.split() };
+
+    let mut ui_state = navigation::UIState::new();
 
     info!("Entering main loop");
     loop {
@@ -96,17 +101,23 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
         let button_pressed = !rx.is_input_high();
         let value = rotary::read_rotation_value() / 100.0;
 
-        let button_state = button_tracker.poll(button_pressed, now);
-        if button_state.event != last_button_state.event {
-            info!(
-                "Button pressed: {} - event: {:?}",
-                button_state.is_pressed, button_state.event
-            );
-            // info!("{}", esp_alloc::HEAP.stats());
-            last_button_state = button_state.clone();
+        if let Some(button_state) = button_tracker.poll(button_pressed, now) {
+            info!("Button state: {}", button_state);
+            navigation::handle_event(&mut ui_state, button_state);
         }
 
-        if let Err(delay) = render(display, value, button_state).await {
+        let current_screen: Screen = ui_state.current().clone();
+
+        // if button_state.event != last_button_state.event {
+        //     info!(
+        //         "Button pressed: {} - event: {:?}",
+        //         button_state.is_pressed, button_state.event
+        //     );
+        //     // info!("{}", esp_alloc::HEAP.stats());
+        //     last_button_state = button_state.clone();
+        // }
+
+        if let Err(delay) = render(display, value, current_screen).await {
             info!("render error from render: {}", delay);
         }
 
