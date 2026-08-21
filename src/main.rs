@@ -122,7 +122,10 @@ fn enable_gpio_interrupts() {
     );
 }
 
-use alloc::vec::Vec;
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use esp_hal::otg_fs::Usb;
 
 #[embassy_executor::task]
@@ -159,39 +162,43 @@ async fn usb_task(usb: Usb<'static>) {
     let mut class = CdcAcmClass::new(&mut builder, STATE.init(State::new()), 64);
     let mut usb_device = builder.build();
 
+    // let (mut rx, mut tx) = class.split();
+
     let usb_future = usb_device.run();
     let echo_future = async {
         loop {
             class.wait_connection().await;
             info!("USB connected");
 
-            let payload = read_frame(&mut class).await;
-            match payload {
-                Ok(payload) => {
-                    info!("read {} bytes", payload.len());
-                    if !payload.is_empty() {
-                        let packet_buf = &payload[..];
-
-                        let devices: Vec<shared_types::AudioDevice> =
-                            match ciborium::from_reader(packet_buf) {
-                                Ok(t) => t,
-                                Err(e) => {
-                                    use alloc::string::ToString;
-                                    info!("{}", e.to_string().as_str());
-                                    continue;
-                                }
-                            };
-
-                        for device in devices {
-                            info!("Payload: {}", device.name.as_str());
-                        }
-                    }
-                }
+            let raw_frame = match read_frame(&mut class).await {
+                Ok(frame) => frame,
                 Err(error) => {
-                    info!("read error: {}", error);
-                    break;
+                    info!("{}", error);
+                    continue;
                 }
+            };
+
+            info!("read {} bytes", raw_frame.len());
+
+            if raw_frame.is_empty() {
+                info!("Payload is empty");
+                continue;
             }
+
+            let payload = match decode_message(&raw_frame) {
+                Ok(payload) => payload,
+                Err(error) => {
+                    info!(
+                        "Decode error: [read bytes: {}] {}",
+                        raw_frame.len(),
+                        error.as_str()
+                    );
+                    continue;
+                }
+            };
+
+            let hello = alloc::format!("{:?}", payload);
+            info!("{}", hello.as_str());
             info!("USB disconnected");
         }
     };
@@ -201,51 +208,22 @@ async fn usb_task(usb: Usb<'static>) {
     info!("USB Task finished");
 }
 
-use embassy_usb::{class::cdc_acm::CdcAcmClass, driver::EndpointError};
-use esp_hal::otg_fs::asynch::Driver;
+use shared_types::protocol::{Envelope, read_frame};
 
-async fn read_frame<'a>(class: &mut CdcAcmClass<'a, Driver<'a>>) -> Result<Vec<u8>, EndpointError> {
-    use alloc::vec;
+fn decode_message(payload: &Vec<u8>) -> Result<Envelope, String> {
+    let data = payload.as_slice();
+    ciborium::from_reader(data).map_err(|e| e.to_string())
+}
 
-    const MAX_FRAME_LEN: usize = 1024;
-    let mut packet_buf = vec![0u8; class.max_packet_size() as usize];
+#[allow(dead_code)]
+fn encode_message(envelope: &Envelope) -> Vec<u8> {
+    use shared_types::protocol::encode_frame;
 
-    let mut header_buf = [0u8; 3];
-    let mut len_have = 0;
-
-    // Extract length (2 bytes) from the packet
-    while len_have < header_buf.len() {
-        let n = class.read_packet(&mut packet_buf).await?;
-        for &b in &packet_buf[..n] {
-            if len_have < header_buf.len() {
-                header_buf[len_have] = b;
-                len_have += 1;
-            }
-            // What if the host sends more than 3 bytes?
+    match encode_frame(envelope) {
+        Ok(frame) => frame.build(),
+        Err(err) => {
+            defmt::warn!("Encode error: {}", err.as_str());
+            Vec::new()
         }
     }
-
-    let len_buf = header_buf[..2].try_into().unwrap();
-    // Convert type byte to an concrete type.
-    // if shared_types::AudioDevice == 1, type_int will be 1, otherwise 0
-    let _type_int = header_buf[3] as usize;
-
-    // Decode frame length
-    let frame_len = u16::from_le_bytes(len_buf) as usize;
-    if frame_len > MAX_FRAME_LEN {
-        return Err(EndpointError::BufferOverflow); // reject oversized/garbage frame
-    }
-
-    let mut payload = Vec::new();
-
-    // Keep reading packets until we have accumulated the full payload
-    while payload.len() < frame_len {
-        let n = class.read_packet(&mut packet_buf).await?;
-        let remaining = frame_len - payload.len();
-        // In case it reads more than we need, take only the remaining bytes
-        let take = n.min(remaining);
-        payload.extend_from_slice(&packet_buf[..take]);
-    }
-
-    Ok(payload)
 }
