@@ -11,7 +11,7 @@ pub enum TextStyle {
 }
 
 impl TextStyle {
-    const fn value(&self) -> MonoTextStyle<'_, BinaryColor> {
+    pub const fn value(&self) -> MonoTextStyle<'_, BinaryColor> {
         use embedded_graphics::mono_font::ascii::{FONT_6X10, FONT_8X13, FONT_9X15};
 
         match self {
