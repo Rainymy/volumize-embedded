@@ -20,6 +20,7 @@ usb-device  = { version = "0.3.2", features = ["defmt"] }
 usbd-serial = { version = "0.2.2" }
 
 # Async Runtime
+embassy-sync     = { version = "0.8.0",  features = [] }
 embassy-executor = { version = "0.10.0", features = ["defmt"] }
 embassy-time     = { version = "0.5.0",  features = ["defmt"] }
 embassy-usb      = { version = "0.6.0",  features = ["defmt"] }
@@ -42,7 +43,8 @@ ciborium-io      = { version = "0.2.2",   default-features = false }
 # Display & Graphics
 embedded-graphics = { version = "0.8.2" }
 embedded-hal      = { version = "1.0.0" }
-ssd1306           = { version = "0.10.0" }
+ssd1306           = { version = "0.10.0", features = ["async"] }
+display-interface = { version = "0.5.0" }
 
 # UI Framework
 # buoyant = "0.7.0"

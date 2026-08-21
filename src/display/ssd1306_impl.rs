@@ -1,59 +1,28 @@
-#![allow(dead_code)]
+// #![allow(dead_code)]
 
 use alloc::{format, vec};
-use core::fmt::Write;
 
 use defmt::info;
+use display_interface::AsyncWriteOnlyDataCommand;
 use embedded_graphics::{
     draw_target::DrawTarget,
-    geometry::{OriginDimensions, Point, Size},
-    mono_font::{MonoTextStyle, MonoTextStyleBuilder},
+    geometry::{Point, Size},
     pixelcolor::BinaryColor,
     primitives::Rectangle,
 };
+
 use ssd1306::{
-    Ssd1306,
-    mode::{BufferedGraphicsMode, TerminalMode},
-    prelude::WriteOnlyDataCommand,
-    size::{DisplaySize, DisplaySize128x64},
+    Ssd1306Async,
+    mode::{BufferedGraphicsModeAsync, TerminalDisplaySizeAsync, TerminalModeAsync},
+    size::DisplaySizeAsync,
 };
 
+// use super::text_style::TextStyle;
 // use crate::{digits::digit_to_str, helper::digits::number_to_vec};
 
 use super::ButtonEvent;
 use super::RenderDisplay;
 use super::{Align, Bitmap, Corners, Flexbox, Percentage, Style};
-
-#[allow(dead_code)]
-enum TextStyle {
-    Small,
-    Medium,
-    Large,
-}
-
-impl TextStyle {
-    const fn value(&self) -> MonoTextStyle<'_, BinaryColor> {
-        use embedded_graphics::mono_font::ascii::{FONT_6X10, FONT_8X13, FONT_9X15};
-
-        match self {
-            TextStyle::Small => MonoTextStyleBuilder::new()
-                .font(&FONT_6X10)
-                .text_color(BinaryColor::On)
-                .background_color(BinaryColor::Off)
-                .build(),
-            TextStyle::Medium => MonoTextStyleBuilder::new()
-                .font(&FONT_8X13)
-                .text_color(BinaryColor::On)
-                .background_color(BinaryColor::Off)
-                .build(),
-            TextStyle::Large => MonoTextStyleBuilder::new()
-                .font(&FONT_9X15)
-                .text_color(BinaryColor::On)
-                .background_color(BinaryColor::Off)
-                .build(),
-        }
-    }
-}
 
 fn rounded_rectangle<D>(
     display: &mut D,
@@ -80,9 +49,6 @@ where
 
     let flexbox = Flexbox::new(content_area, 3i32);
     let flex_area = flexbox.vertical(&[1, 2, 3, 1, 1]);
-
-    // percentage.increment_percentage(0.1);
-    // percentage.increment_percentage(5);
 
     for (i, area) in flex_area.into_iter().enumerate() {
         let color = BinaryColor::Off;
@@ -179,26 +145,19 @@ where
     Ok(())
 }
 
-impl<DI, SIZE> RenderDisplay for Ssd1306<DI, SIZE, BufferedGraphicsMode<SIZE>>
+impl<DI, SIZE> RenderDisplay for Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>
 where
-    DI: WriteOnlyDataCommand,
-    SIZE: DisplaySize,
+    DI: AsyncWriteOnlyDataCommand,
+    SIZE: DisplaySizeAsync,
     Self: DrawTarget<Color = BinaryColor>,
 {
-    fn render(&mut self, value: f32, _button_state: ButtonEvent) -> Result<(), u16> {
+    async fn render(&mut self, value: f32, _button_state: ButtonEvent) -> Result<(), u16> {
         if self.clear(BinaryColor::Off).is_err() {
             return Err(100);
         }
 
-        let display_height = self.size().height;
-
+        let display_height = SIZE::HEIGHT as u32;
         let mut percentage = Percentage::from_float(value);
-
-        // let small_style = TextStyle::Small.value();
-        // let small_top = small_style.font.character_size.height;
-
-        // let big_style = TextStyle::Large.value();
-        // let big_top = big_style.font.character_size.height;
 
         for (i, size) in vec![Size::new(40, display_height); 1]
             .into_iter()
@@ -210,7 +169,7 @@ where
             let _ = rounded_rectangle(self, coord, size, &mut percentage);
         }
 
-        if self.flush().is_err() {
+        if self.flush().await.is_err() {
             return Err(200);
         }
 
@@ -221,11 +180,12 @@ where
 static mut LAST_VALUE: Option<f32> = None;
 
 // ---- Terminal mode ----
-impl<DI> RenderDisplay for Ssd1306<DI, DisplaySize128x64, TerminalMode>
+impl<DI, SIZE> RenderDisplay for Ssd1306Async<DI, SIZE, TerminalModeAsync>
 where
-    DI: WriteOnlyDataCommand,
+    DI: AsyncWriteOnlyDataCommand,
+    SIZE: TerminalDisplaySizeAsync,
 {
-    fn render(&mut self, value: f32, _button_state: ButtonEvent) -> Result<(), u16> {
+    async fn render(&mut self, value: f32, _button_state: ButtonEvent) -> Result<(), u16> {
         if unsafe { LAST_VALUE } == Some(value) {
             return Ok(());
         }

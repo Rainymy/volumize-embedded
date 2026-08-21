@@ -1728,6 +1728,7 @@ dependencies = [
  "display-interface-spi",
  "embedded-graphics-core",
  "embedded-hal 1.0.0",
+ "embedded-hal-async",
  "maybe-async-cfg",
 ]
 
@@ -2064,8 +2065,10 @@ dependencies = [
  "ciborium-io",
  "critical-section",
  "defmt 1.1.1",
+ "display-interface",
  "embassy-executor",
  "embassy-futures",
+ "embassy-sync 0.8.0",
  "embassy-time",
  "embassy-usb",
  "embedded-graphics",

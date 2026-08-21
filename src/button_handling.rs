@@ -7,7 +7,7 @@ type Timestamp = u64;
 const DEBOUNCE_MS: Timestamp = 150;
 const LONG_PRESS_MS: Timestamp = 600;
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug, defmt::Format)]
 pub enum ButtonPressState {
     None,
     ShortPress,
@@ -18,16 +18,6 @@ pub enum ButtonPressState {
 pub struct ButtonEvent {
     pub is_pressed: bool,
     pub event: ButtonPressState,
-}
-
-impl defmt::Format for ButtonPressState {
-    fn format(&self, fmt: defmt::Formatter) {
-        match self {
-            ButtonPressState::None => defmt::write!(fmt, "None"),
-            ButtonPressState::ShortPress => defmt::write!(fmt, "ShortPress"),
-            ButtonPressState::LongPress => defmt::write!(fmt, "LongPress"),
-        }
-    }
 }
 
 pub struct ButtonTracker {

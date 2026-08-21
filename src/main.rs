@@ -19,6 +19,7 @@ use esp_hal::{
     gpio::Pin,
     i2c::master::{Config as I2cConfig, I2c},
     interrupt::{InterruptHandler, software::SoftwareInterruptControl},
+    otg_fs::Usb,
     rtc_cntl,
     timer::timg::TimerGroup,
 };
@@ -27,6 +28,7 @@ mod button_handling;
 mod display;
 mod init_display;
 mod rotary;
+mod usb;
 
 use button_handling::ButtonTracker;
 use display::render;
@@ -64,7 +66,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
 
     // USB CDC-ACM - Serial over USB
     let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
-    match usb_task(usb) {
+    match usb::usb_task(usb, spawner) {
         Ok(task) => spawner.spawn(task),
         Err(e) => defmt::panic!("Failed to spawn usb task: {:?}", e),
     };
@@ -74,12 +76,13 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let i2c_config = I2cConfig::default();
     let i2c = defmt::expect!(I2c::new(peripherals.I2C0, i2c_config), "I2C Failed")
         .with_scl(peripherals.GPIO4)
-        .with_sda(peripherals.GPIO5);
+        .with_sda(peripherals.GPIO5)
+        .into_async();
 
     // Initialize the display with I2C communication.
     info!("Initialize the display");
     let display = defmt::expect!(
-        init_display::init_display(i2c),
+        init_display::init_display(i2c).await,
         "Display not initialized or Not Connected"
     );
 
@@ -103,7 +106,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             last_button_state = button_state.clone();
         }
 
-        if let Err(delay) = render(display, value, button_state) {
+        if let Err(delay) = render(display, value, button_state).await {
             info!("render error from render: {}", delay);
         }
 
@@ -120,110 +123,4 @@ fn enable_gpio_interrupts() {
         Interrupt::GPIO,
         InterruptHandler::new(update_encoder, Priority::min()),
     );
-}
-
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
-use esp_hal::otg_fs::Usb;
-
-#[embassy_executor::task]
-async fn usb_task(usb: Usb<'static>) {
-    use embassy_usb::{
-        Builder, Config as UsbConfig,
-        class::cdc_acm::{CdcAcmClass, State},
-    };
-    use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
-    use static_cell::StaticCell;
-
-    info!("USB Task started");
-
-    static EP_OUT_BUFFER: StaticCell<[u8; 256]> = StaticCell::new();
-    static CONFIG_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-    static BOS_DESC: StaticCell<[u8; 256]> = StaticCell::new();
-    static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
-    static STATE: StaticCell<State> = StaticCell::new();
-
-    let mut config = UsbConfig::new(0x1209, 0x0001);
-    config.manufacturer = Some("Volumize");
-    config.product = Some("Volumize Hardware");
-    config.serial_number = Some("VMZE:01");
-
-    let mut builder = Builder::new(
-        Driver::new(usb, EP_OUT_BUFFER.init([0u8; 256]), OtgConfig::default()),
-        config,
-        CONFIG_DESC.init([0u8; 256]),
-        BOS_DESC.init([0u8; 256]),
-        &mut [],
-        CONTROL_BUF.init([0u8; 64]),
-    );
-
-    let mut class = CdcAcmClass::new(&mut builder, STATE.init(State::new()), 64);
-    let mut usb_device = builder.build();
-
-    // let (mut rx, mut tx) = class.split();
-
-    let usb_future = usb_device.run();
-    let echo_future = async {
-        loop {
-            class.wait_connection().await;
-            info!("USB connected");
-
-            let raw_frame = match read_frame(&mut class).await {
-                Ok(frame) => frame,
-                Err(error) => {
-                    info!("{}", error);
-                    continue;
-                }
-            };
-
-            info!("read {} bytes", raw_frame.len());
-
-            if raw_frame.is_empty() {
-                info!("Payload is empty");
-                continue;
-            }
-
-            let payload = match decode_message(&raw_frame) {
-                Ok(payload) => payload,
-                Err(error) => {
-                    info!(
-                        "Decode error: [read bytes: {}] {}",
-                        raw_frame.len(),
-                        error.as_str()
-                    );
-                    continue;
-                }
-            };
-
-            let hello = alloc::format!("{:?}", payload);
-            info!("{}", hello.as_str());
-            info!("USB disconnected");
-        }
-    };
-
-    embassy_futures::join::join(usb_future, echo_future).await;
-
-    info!("USB Task finished");
-}
-
-use shared_types::protocol::{Envelope, read_frame};
-
-fn decode_message(payload: &Vec<u8>) -> Result<Envelope, String> {
-    let data = payload.as_slice();
-    ciborium::from_reader(data).map_err(|e| e.to_string())
-}
-
-#[allow(dead_code)]
-fn encode_message(envelope: &Envelope) -> Vec<u8> {
-    use shared_types::protocol::encode_frame;
-
-    match encode_frame(envelope) {
-        Ok(frame) => frame.build(),
-        Err(err) => {
-            defmt::warn!("Encode error: {}", err.as_str());
-            Vec::new()
-        }
-    }
 }
