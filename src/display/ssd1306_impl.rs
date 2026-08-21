@@ -3,9 +3,11 @@ use alloc::{format, vec};
 use defmt::info;
 use display_interface::AsyncWriteOnlyDataCommand;
 use embedded_graphics::{
+    Drawable,
     draw_target::DrawTarget,
     geometry::{Point, Size},
     pixelcolor::BinaryColor,
+    text::Text,
 };
 
 use ssd1306::{
@@ -14,7 +16,7 @@ use ssd1306::{
     size::DisplaySizeAsync,
 };
 
-use crate::navigation::Screen;
+use crate::{display::text_style::TextStyle, navigation::Screen};
 
 use super::Percentage;
 use super::RenderDisplay;
@@ -33,6 +35,15 @@ where
 
         let display_height = SIZE::HEIGHT as u32;
         let mut percentage = Percentage::from_float(value);
+
+        let text_style = TextStyle::Small.value();
+        let font_height = text_style.font.character_size.height;
+
+        let text = format!("{:?}", _screen);
+        // info!("Screen: {}", text.as_str());
+        Text::new(&text, Point::new(0, font_height as i32), text_style)
+            .draw(self)
+            .ok();
 
         for (i, size) in vec![Size::new(40, display_height); 1]
             .into_iter()
