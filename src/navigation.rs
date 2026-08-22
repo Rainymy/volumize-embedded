@@ -1,5 +1,7 @@
 use alloc::vec::Vec;
 
+use super::button_handling::ButtonEvent;
+
 #[derive(Clone, Copy, Debug, defmt::Format)]
 pub enum Screen {
     MainMenu { selected: u8 },
@@ -51,28 +53,20 @@ pub enum Button {
     Back,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, defmt::Format)]
-pub enum InputEvent {
-    ShortPress(Button),
-    LongPress(Button),
-    DoubleClick,
-}
-
-pub fn handle_event(ui_state: &mut UIState, event: InputEvent) {
+pub fn handle_event(ui_state: &mut UIState, event: ButtonEvent) {
     match (&*ui_state.current(), event) {
-        (Screen::MainMenu { selected }, InputEvent::ShortPress(Button::Select)) => {
+        (Screen::MainMenu { selected }, ButtonEvent::LongPress) => {
             let _ = selected;
             ui_state.push(Screen::VolumeAdjust { value: 0 });
         }
-        (Screen::VolumeAdjust { .. }, InputEvent::LongPress(Button::Back)) => {
+        (Screen::VolumeAdjust { .. }, ButtonEvent::LongPress) => {
             ui_state.pop();
         }
-        (Screen::VolumeAdjust { value }, InputEvent::ShortPress(Button::Select)) => {
+        (Screen::VolumeAdjust { value }, ButtonEvent::SingleClick) => {
             let new_value = *value + 1;
             ui_state.push(Screen::VolumeAdjust { value: new_value });
         }
-        (Screen::MainMenu { .. }, InputEvent::DoubleClick) => {
+        (Screen::MainMenu { .. }, ButtonEvent::DoubleClick) => {
             ui_state.push(Screen::Settings { selected: 0 });
         }
         _ => {} // event doesn't apply to current screen — ignored

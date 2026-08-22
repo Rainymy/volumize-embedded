@@ -1,74 +1,80 @@
-#![allow(unused)]
-
-use core::fmt::Display;
-
 type Timestamp = u64;
 
-const DEBOUNCE_MS: Timestamp = 150;
 const LONG_PRESS_MS: Timestamp = 600;
+const DOUBLE_CLICK_GAP_MS: Timestamp = 300;
 
-#[derive(PartialEq, Clone, Copy, Debug, defmt::Format)]
-pub enum ButtonPressState {
-    None,
-    ShortPress,
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+enum ButtonState {
+    Idle,
+    Pressed { since: Timestamp },
+    WaitingForSecondPress { released_at: Timestamp },
+    PressedSecond { since: Timestamp },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+pub enum ButtonEvent {
+    SingleClick,
+    DoubleClick,
     LongPress,
 }
 
-use super::navigation::{Button, InputEvent};
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub struct ButtonEvent {
-    pub is_pressed: bool,
-    pub event: ButtonPressState,
-}
-
 pub struct ButtonTracker {
-    pressed: bool,
-    last_change_ms: Timestamp,
-    press_start_ms: Timestamp,
-    long_fired: bool,
+    state: ButtonState,
 }
 
 impl ButtonTracker {
     pub fn new() -> Self {
         Self {
-            pressed: false,
-            last_change_ms: 0,
-            press_start_ms: 0,
-            long_fired: false,
+            state: ButtonState::Idle,
         }
     }
 
-    /// Returns (state_changed, event). `raw_pressed` is true when the pin
-    /// reads LOW (button pulled to ground when pressed).
-    pub fn poll(&mut self, raw_pressed: bool, now_ms: Timestamp) -> Option<InputEvent> {
-        let mut event = ButtonPressState::None;
-
-        if raw_pressed != self.pressed && now_ms.wrapping_sub(self.last_change_ms) > DEBOUNCE_MS {
-            self.pressed = raw_pressed;
-            self.last_change_ms = now_ms;
-
-            if self.pressed {
-                self.press_start_ms = now_ms;
-                self.long_fired = false;
-            } else if !self.long_fired {
-                // released before the long-press threshold -> short press
-                event = ButtonPressState::ShortPress;
+    pub fn on_edge(&mut self, is_down: bool, now: u64) -> Option<ButtonEvent> {
+        match self.state {
+            ButtonState::Idle => {
+                if is_down {
+                    self.state = ButtonState::Pressed { since: now };
+                }
+                None
+            }
+            ButtonState::Pressed { since: _ } => {
+                if !is_down {
+                    // released — could be single or double click, wait and see
+                    self.state = ButtonState::WaitingForSecondPress { released_at: now };
+                }
+                None
+            }
+            ButtonState::WaitingForSecondPress { .. } => {
+                if is_down {
+                    self.state = ButtonState::PressedSecond { since: now };
+                }
+                None
+            }
+            ButtonState::PressedSecond { .. } => {
+                if !is_down {
+                    self.state = ButtonState::Idle;
+                    return Some(ButtonEvent::DoubleClick);
+                }
+                None
             }
         }
+    }
 
-        if self.pressed
-            && !self.long_fired
-            && now_ms.wrapping_sub(self.press_start_ms) > LONG_PRESS_MS
-        {
-            self.long_fired = true;
-            event = ButtonPressState::LongPress;
-        }
-
-        match event {
-            ButtonPressState::None => None,
-            ButtonPressState::ShortPress => Some(InputEvent::ShortPress(Button::Select)),
-            ButtonPressState::LongPress => Some(InputEvent::LongPress(Button::DoubleClick)),
+    /// Call this every loop iteration (regardless of new edges) with the
+    /// current time, to resolve timeouts that don't depend on a new press.
+    pub fn check_timeouts(&mut self, now: u64) -> Option<ButtonEvent> {
+        match self.state {
+            ButtonState::Pressed { since } if now.saturating_sub(since) >= LONG_PRESS_MS => {
+                self.state = ButtonState::Idle;
+                Some(ButtonEvent::LongPress)
+            }
+            ButtonState::WaitingForSecondPress { released_at }
+                if now.saturating_sub(released_at) > DOUBLE_CLICK_GAP_MS =>
+            {
+                self.state = ButtonState::Idle;
+                Some(ButtonEvent::SingleClick)
+            }
+            _ => None,
         }
     }
 }

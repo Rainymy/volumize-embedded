@@ -18,17 +18,17 @@ use esp_hal::{
     clock::CpuClock,
     gpio::Pin,
     i2c::master::{Config as I2cConfig, I2c},
-    interrupt::{InterruptHandler, software::SoftwareInterruptControl},
+    interrupt::software::SoftwareInterruptControl,
     otg_fs::Usb,
-    rtc_cntl,
+    time::Instant,
     timer::timg::TimerGroup,
 };
 
 mod button_handling;
 mod display;
 mod init_display;
+mod interrupt_handler;
 mod navigation;
-mod rotary;
 mod usb;
 
 use button_handling::ButtonTracker;
@@ -55,17 +55,16 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     info!("RTOS scheduler started!");
 
-    // Setup rotary encoder.
+    // Setup interrupt pins.
     let dt_pin = peripherals.GPIO36.degrade();
     let clk_pin = peripherals.GPIO40.degrade();
-    rotary::init_rotary(dt_pin, clk_pin);
-    info!("Rotary encoder initialized!");
+    let button_pin = peripherals.GPIO35.degrade();
 
-    // Real Time Clock
-    let rtc = rtc_cntl::Rtc::new(peripherals.LPWR);
-
-    // Enable GPIO interrupts.
-    enable_gpio_interrupts();
+    // Initialize interrupt handlers.
+    interrupt_handler::init_rotary_interrupt(dt_pin, clk_pin);
+    interrupt_handler::init_button_interrupt(button_pin);
+    interrupt_handler::enable_gpio_interrupts();
+    info!("Interrupt handlers initialized!");
 
     // USB CDC-ACM - Serial over USB
     let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
@@ -90,48 +89,28 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     );
 
     let mut button_tracker = ButtonTracker::new();
-    let mut _last_button_state = button_tracker.poll(false, 0);
-    let (rx, _tx) = unsafe { peripherals.GPIO35.split() };
-
     let mut ui_state = navigation::UIState::new();
 
     info!("Entering main loop");
     loop {
-        let now = rtc.current_time_us();
-        let button_pressed = !rx.is_input_high();
-        let value = rotary::read_rotation_value() / 100.0;
+        let now_ms = Instant::now().duration_since_epoch().as_millis();
+        let value = interrupt_handler::read_rotation_value() / 100.0;
 
-        if let Some(button_state) = button_tracker.poll(button_pressed, now) {
-            info!("Button state: {}", button_state);
+        interrupt_handler::with_edge_queue(|is_down, timestamp| {
+            if let Some(event) = button_tracker.on_edge(is_down, timestamp) {
+                info!("Edge event: {}", event);
+                navigation::handle_event(&mut ui_state, event);
+            }
+        });
+
+        if let Some(button_state) = button_tracker.check_timeouts(now_ms) {
+            info!("Timeout event: {}", button_state);
             navigation::handle_event(&mut ui_state, button_state);
         }
 
         let current_screen: Screen = ui_state.current().clone();
-
-        // if button_state.event != last_button_state.event {
-        //     info!(
-        //         "Button pressed: {} - event: {:?}",
-        //         button_state.is_pressed, button_state.event
-        //     );
-        //     // info!("{}", esp_alloc::HEAP.stats());
-        //     last_button_state = button_state.clone();
-        // }
-
         if let Err(delay) = render(display, value, current_screen).await {
             info!("render error from render: {}", delay);
         }
-
-        embassy_time::Timer::after_millis(20).await;
     }
-}
-
-// Enable GPIO interrupts.
-fn enable_gpio_interrupts() {
-    use esp_hal::{interrupt, interrupt::Priority, peripherals::Interrupt};
-    use rotary::update_encoder;
-
-    interrupt::bind_handler(
-        Interrupt::GPIO,
-        InterruptHandler::new(update_encoder, Priority::min()),
-    );
 }
