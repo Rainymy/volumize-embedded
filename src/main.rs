@@ -27,12 +27,8 @@ use esp_hal::{
 mod display;
 mod init_display;
 mod input;
-mod interrupt_handler;
-// mod navigation;
-mod screens;
 mod usb;
 
-use display::render;
 pub use input::{ButtonTracker, InputEvent, RotaryTracker, RotationEvent};
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -60,9 +56,9 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let btn_pin = peripherals.GPIO35.degrade();
 
     // Initialize interrupt handlers.
-    interrupt_handler::init_rotary_interrupt(dt_pin, clk_pin);
-    interrupt_handler::init_button_interrupt(btn_pin);
-    interrupt_handler::enable_gpio_interrupts();
+    input::init_rotary_interrupt(dt_pin, clk_pin);
+    input::init_button_interrupt(btn_pin);
+    input::enable_gpio_interrupts();
     info!("Interrupt handlers initialized!");
 
     // USB CDC-ACM - Serial over USB
@@ -90,31 +86,31 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut button_tracker = ButtonTracker::default();
     let mut rotary_tracker = RotaryTracker::default();
 
-    let mut ui_state = screens::UIState::new();
+    let mut ui_state = display::UIState::new();
 
     info!("Entering main loop");
     loop {
-        let value = interrupt_handler::read_rotation_value();
+        let value = input::read_rotation_value();
         if let Some(event) = rotary_tracker.poll(value as i16) {
-            info!("Rotary event: {}", event);
-            screens::handle_event(&mut ui_state, event);
+            // info!("Rotary event: {}", event);
+            display::handle_event(&mut ui_state, event);
         }
 
-        interrupt_handler::with_edge_queue(|is_down, timestamp| {
+        input::with_edge_queue(|is_down, timestamp| {
             if let Some(event) = button_tracker.on_edge(is_down, timestamp) {
                 info!("Edge event: {}", event);
-                screens::handle_event(&mut ui_state, event);
+                display::handle_event(&mut ui_state, event);
             }
         });
 
         let now_ms = Instant::now().duration_since_epoch().as_millis();
         if let Some(button_state) = button_tracker.check_timeouts(now_ms) {
             info!("Timeout event: {}", button_state);
-            screens::handle_event(&mut ui_state, button_state);
+            display::handle_event(&mut ui_state, button_state);
         }
 
-        let current_screen: screens::Screen = ui_state.current().clone();
-        if let Err(delay) = render(display, current_screen).await {
+        let current_screen: display::Screen = ui_state.current().clone();
+        if let Err(delay) = display::render(display, current_screen).await {
             info!("render error from render: {}", delay);
         }
     }

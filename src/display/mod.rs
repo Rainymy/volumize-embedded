@@ -1,24 +1,12 @@
+mod driver;
 mod percentage;
-mod rounded_rectangle;
-mod ssd1306_impl;
-mod style;
+mod render;
+mod screen;
+pub mod style;
+mod widget;
+
 pub mod text_style;
 
 pub use percentage::*;
-pub use rounded_rectangle::*;
-pub use style::*;
-
-use super::screens::Screen;
-
-// use super::button_handling::ButtonEvent;
-
-pub trait RenderDisplay {
-    async fn render(&mut self, screen: Screen) -> Result<(), u16>;
-}
-
-pub async fn render<D>(display: &mut D, screen: Screen) -> Result<(), u16>
-where
-    D: RenderDisplay,
-{
-    display.render(screen).await
-}
+pub use render::*;
+pub use screen::*;

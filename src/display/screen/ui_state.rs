@@ -1,6 +1,4 @@
-use super::MainMenuState;
-use super::Screen;
-
+use super::{MainMenuState, Screen};
 use alloc::vec::Vec;
 
 pub struct UIState {
@@ -16,7 +14,7 @@ impl UIState {
     }
 
     pub fn push(&mut self, screen: Screen) {
-        let _ = self.stack.push(screen);
+        self.stack.push(screen);
     }
 
     pub fn pop(&mut self) {

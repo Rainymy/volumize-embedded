@@ -1,14 +1,8 @@
-use alloc::{format, vec};
+use alloc::format;
 
 use defmt::info;
 use display_interface::AsyncWriteOnlyDataCommand;
-use embedded_graphics::{
-    Drawable,
-    draw_target::DrawTarget,
-    geometry::{Point, Size},
-    pixelcolor::BinaryColor,
-    text::Text,
-};
+use embedded_graphics::{draw_target::DrawTarget, pixelcolor::BinaryColor};
 
 use ssd1306::{
     Ssd1306Async,
@@ -16,11 +10,10 @@ use ssd1306::{
     size::DisplaySizeAsync,
 };
 
-use crate::{display::text_style::TextStyle, screens::Screen};
-
-use super::Percentage;
-use super::RenderDisplay;
-use super::rounded_rectangle;
+use crate::{
+    display::Screen,
+    display::{RenderDisplay, screen},
+};
 
 impl<DI, SIZE> RenderDisplay for Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>
 where
@@ -28,38 +21,17 @@ where
     SIZE: DisplaySizeAsync,
     Self: DrawTarget<Color = BinaryColor>,
 {
-    async fn render(&mut self, _screen: Screen) -> Result<(), u16> {
+    async fn render(&mut self, screen: Screen) -> Result<(), u16> {
         if self.clear(BinaryColor::Off).is_err() {
             return Err(100);
         }
 
-        let value = match &_screen {
-            // Screen::VolumeAdjust(volume) => volume.value,
-            Screen::MainMenu(selected) => selected.selected as u32,
-            _ => 57,
-        };
-
-        let display_height = SIZE::HEIGHT as u32;
-        let mut percentage = Percentage::from_int(value);
-
-        let text_style = TextStyle::Small.value();
-        let font_height = text_style.font.character_size.height;
-
-        let text = format!("{:?}", _screen);
-        // info!("Screen: {}", text.as_str());
-        Text::new(&text, Point::new(0, font_height as i32), text_style)
-            .draw(self)
-            .ok();
-
-        for (i, size) in vec![Size::new(40, display_height); 1]
-            .into_iter()
-            .enumerate()
-        {
-            let width = size.width as i32;
-            let coord = Point::new(i as i32 * width, 0);
-
-            let _ = rounded_rectangle(self, coord, size, &mut percentage);
+        match screen {
+            Screen::MainMenu(state) => screen::main_menu::render(self, state).await,
+            Screen::Settings(state) => screen::settings::render(self, state).await,
+            Screen::VolumeAdjust(state) => screen::adjust_volume::render(self, state).await,
         }
+        .map_err(|_| 400u16)?;
 
         if self.flush().await.is_err() {
             return Err(200);

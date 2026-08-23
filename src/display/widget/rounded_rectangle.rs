@@ -3,7 +3,9 @@ use embedded_graphics::geometry::{Point, Size};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{draw_target::DrawTarget, primitives::Rectangle};
 
-use super::{Align, Bitmap, Corners, Flexbox, Percentage, Style};
+// use super::{Align, Corners, Style};
+use crate::display::Percentage;
+use crate::display::style::{Align, Bitmap, Corners, Flexbox, Style};
 
 pub fn rounded_rectangle<D>(
     display: &mut D,
