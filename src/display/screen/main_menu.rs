@@ -10,6 +10,8 @@ use embedded_graphics::{
 use crate::{
     InputEvent, RotationEvent,
     display::{
+        Screen,
+        adjust_volume::VolumeAdjustState,
         screen::Transition,
         style::{Align, Flexbox, Insets, Style},
         text_style::TextStyle,
@@ -38,6 +40,7 @@ pub fn handle_main_menu(state: &mut MainMenuState, event: InputEvent) -> Transit
             Transition::Stay
         }
         InputEvent::SingleClick => match state.selected {
+            0 => Transition::Push(Screen::VolumeAdjust(VolumeAdjustState::default())),
             _ => Transition::Stay,
         },
         _ => Transition::Ignored,
