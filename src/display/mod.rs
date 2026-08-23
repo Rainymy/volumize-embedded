@@ -8,17 +8,17 @@ pub use percentage::*;
 pub use rounded_rectangle::*;
 pub use style::*;
 
-use crate::navigation::Screen;
+use super::screens::Screen;
 
 // use super::button_handling::ButtonEvent;
 
 pub trait RenderDisplay {
-    async fn render(&mut self, value: f32, screen: Screen) -> Result<(), u16>;
+    async fn render(&mut self, screen: Screen) -> Result<(), u16>;
 }
 
-pub async fn render<D>(display: &mut D, value: f32, screen: Screen) -> Result<(), u16>
+pub async fn render<D>(display: &mut D, screen: Screen) -> Result<(), u16>
 where
     D: RenderDisplay,
 {
-    display.render(value, screen).await
+    display.render(screen).await
 }

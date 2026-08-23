@@ -16,7 +16,7 @@ use ssd1306::{
     size::DisplaySizeAsync,
 };
 
-use crate::{display::text_style::TextStyle, navigation::Screen};
+use crate::{display::text_style::TextStyle, screens::Screen};
 
 use super::Percentage;
 use super::RenderDisplay;
@@ -28,13 +28,19 @@ where
     SIZE: DisplaySizeAsync,
     Self: DrawTarget<Color = BinaryColor>,
 {
-    async fn render(&mut self, value: f32, _screen: Screen) -> Result<(), u16> {
+    async fn render(&mut self, _screen: Screen) -> Result<(), u16> {
         if self.clear(BinaryColor::Off).is_err() {
             return Err(100);
         }
 
+        let value = match &_screen {
+            // Screen::VolumeAdjust(volume) => volume.value,
+            Screen::MainMenu(selected) => selected.selected as u32,
+            _ => 57,
+        };
+
         let display_height = SIZE::HEIGHT as u32;
-        let mut percentage = Percentage::from_float(value);
+        let mut percentage = Percentage::from_int(value);
 
         let text_style = TextStyle::Small.value();
         let font_height = text_style.font.character_size.height;
@@ -63,7 +69,7 @@ where
     }
 }
 
-static mut LAST_VALUE: Option<f32> = None;
+static mut LAST_VALUE: Option<i32> = None;
 
 // ---- Terminal mode ----
 impl<DI, SIZE> RenderDisplay for Ssd1306Async<DI, SIZE, TerminalModeAsync>
@@ -71,7 +77,13 @@ where
     DI: AsyncWriteOnlyDataCommand,
     SIZE: TerminalDisplaySizeAsync,
 {
-    async fn render(&mut self, value: f32, _screen: Screen) -> Result<(), u16> {
+    async fn render(&mut self, _screen: Screen) -> Result<(), u16> {
+        let value = match &_screen {
+            Screen::VolumeAdjust(volume) => volume.value,
+            Screen::MainMenu(selected) => selected.selected as i32,
+            _ => 57,
+        };
+
         if unsafe { LAST_VALUE } == Some(value) {
             return Ok(());
         }

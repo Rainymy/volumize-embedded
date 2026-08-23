@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+#[derive(Debug, Clone, Copy, defmt::Format)]
 pub struct Percentage {
     value: f32,
 }
@@ -16,6 +17,10 @@ impl Percentage {
         Self {
             value: Self::clamp(value),
         }
+    }
+
+    pub fn from_int(value: u32) -> Self {
+        Self::from_float((value as f32) / 100.0)
     }
 
     fn clamp(value: f32) -> f32 {
