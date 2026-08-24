@@ -30,12 +30,12 @@ pub fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEvent) ->
     }
 }
 
-pub async fn render<D>(display: &mut D, _state: VolumeAdjustState) -> Result<(), D::Error>
+pub async fn render<D>(display: &mut D, state: VolumeAdjustState) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {
     let display_height = display.size().height as u32;
-    let mut percentage = Percentage::from_int(_state.value as u32);
+    let mut percentage = Percentage::from_int(state.value as u32);
 
     // let text_style = TextStyle::Small.value();
     // let font_height = text_style.font.character_size.height;

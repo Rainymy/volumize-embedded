@@ -14,40 +14,47 @@ use crate::{
         adjust_volume::VolumeAdjustState,
         screen::Transition,
         style::{Align, Flexbox, Insets, Style},
+        system_menu::SystemMenuState,
         text_style::TextStyle,
+        util::WrappingInt,
     },
 };
 
-const MENU_ITEM_COUNT: usize = 3;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct MainMenuState {
-    pub selected: usize,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApplicationMenuState {
+    pub selected: WrappingInt,
 }
 
-pub fn handle_main_menu(state: &mut MainMenuState, event: InputEvent) -> Transition {
+impl ApplicationMenuState {
+    pub const MENU_ITEM_COUNT: usize = 3;
+
+    pub fn new() -> Self {
+        Self {
+            selected: WrappingInt::new(0, Self::MENU_ITEM_COUNT as i32),
+        }
+    }
+}
+
+pub fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEvent) -> Transition {
     match event {
         InputEvent::Rotation(RotationEvent::Next) => {
-            state.selected = state.selected.saturating_add(1) % MENU_ITEM_COUNT;
+            state.selected.next();
             Transition::Stay
         }
         InputEvent::Rotation(RotationEvent::Previous) => {
-            if state.selected == 0 {
-                state.selected = MENU_ITEM_COUNT - 1;
-            } else {
-                state.selected = state.selected.saturating_sub(1);
-            }
+            state.selected.prev();
             Transition::Stay
         }
-        InputEvent::SingleClick => match state.selected {
+        InputEvent::SingleClick => match state.selected.value() {
             0 => Transition::Push(Screen::VolumeAdjust(VolumeAdjustState::default())),
             _ => Transition::Stay,
         },
+        InputEvent::LongPress => Transition::Push(Screen::SystemMenu(SystemMenuState::new())),
         _ => Transition::Ignored,
     }
 }
 
-pub async fn render<D>(display: &mut D, state: MainMenuState) -> Result<(), D::Error>
+pub async fn render<D>(display: &mut D, state: ApplicationMenuState) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {
@@ -60,7 +67,7 @@ where
     let height = font_height * 2;
 
     let flexbox = Flexbox::new(display.bounding_box(), 0i32);
-    let items = flexbox.vertical(&vec![1; MENU_ITEM_COUNT]);
+    let items = flexbox.vertical(&vec![1; ApplicationMenuState::MENU_ITEM_COUNT]);
 
     let style = Style::new(BinaryColor::On)
         .padding(Insets::all(2))
@@ -78,7 +85,7 @@ where
         let area = Rectangle::new(point, Size::new(width, height));
         // let area = style.paint(display, area)?;
 
-        if i == state.selected {
+        if i == state.selected.value() as usize {
             let area = style_selected.paint(display, area)?;
             style_selected.draw_text(display, area, &format!("Menu {}", i + 1), text_style.font)?;
         } else {

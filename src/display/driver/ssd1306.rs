@@ -27,9 +27,10 @@ where
         }
 
         match screen {
-            Screen::MainMenu(state) => screen::main_menu::render(self, state).await,
+            Screen::ApplicationList(state) => screen::application_menu::render(self, state).await,
             Screen::Settings(state) => screen::settings::render(self, state).await,
             Screen::VolumeAdjust(state) => screen::adjust_volume::render(self, state).await,
+            Screen::SystemMenu(state) => screen::system_menu::render(self, state).await,
         }
         .map_err(|_| 400u16)?;
 
@@ -52,7 +53,7 @@ where
     async fn render(&mut self, _screen: Screen) -> Result<(), u16> {
         let value = match &_screen {
             Screen::VolumeAdjust(volume) => volume.value,
-            Screen::MainMenu(selected) => selected.selected as i32,
+            Screen::ApplicationList(selected) => selected.selected.value(),
             _ => 57,
         };
 

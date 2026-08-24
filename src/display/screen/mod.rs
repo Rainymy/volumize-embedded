@@ -1,11 +1,14 @@
 pub mod adjust_volume;
-pub mod main_menu;
+pub mod application_menu;
 pub mod settings;
+pub mod system_menu;
 pub mod ui_state;
 
 use adjust_volume::{VolumeAdjustState, handle_volume_adjust};
-use main_menu::{MainMenuState, handle_main_menu};
+use application_menu::{ApplicationMenuState, handle_main_menu};
 use settings::{SettingsState, handle_settings};
+use system_menu::{SystemMenuState, handle_system_menu};
+
 pub use ui_state::UIState;
 
 use crate::InputEvent;
@@ -18,25 +21,27 @@ pub enum Transition {
     Ignored,      // event didn't apply here (optional, same as Stay)
 }
 
-#[allow(dead_code)]
+// #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Screen {
-    MainMenu(MainMenuState),
+    ApplicationList(ApplicationMenuState),
+    SystemMenu(SystemMenuState),
     VolumeAdjust(VolumeAdjustState),
     Settings(SettingsState),
 }
 
 impl Default for Screen {
     fn default() -> Self {
-        Self::MainMenu(MainMenuState::default())
+        Self::ApplicationList(ApplicationMenuState::new())
     }
 }
 
 pub fn handle_event(ui_state: &mut UIState, event: InputEvent) {
     let transition = match ui_state.current_mut() {
-        Screen::MainMenu(state) => handle_main_menu(state, event),
+        Screen::ApplicationList(state) => handle_main_menu(state, event),
         Screen::VolumeAdjust(state) => handle_volume_adjust(state, event),
         Screen::Settings(state) => handle_settings(state, event),
+        Screen::SystemMenu(state) => handle_system_menu(state, event),
     };
 
     match transition {
