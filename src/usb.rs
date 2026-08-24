@@ -3,7 +3,10 @@ use alloc::{
     vec::Vec,
 };
 use defmt::info;
-use esp_hal::otg_fs::Usb;
+use esp_hal::otg_fs::{Usb, asynch::Driver};
+
+use super::{IN_CHANNEL, OUT_CHANNEL};
+use shared_types::protocol::{Envelope, read_frame};
 
 #[embassy_executor::task]
 pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
@@ -11,7 +14,7 @@ pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
         Builder, Config as UsbConfig, UsbDevice,
         class::cdc_acm::{CdcAcmClass, State},
     };
-    use esp_hal::otg_fs::asynch::{Config as OtgConfig, Driver};
+    use esp_hal::otg_fs::asynch::Config as OtgConfig;
     use static_cell::StaticCell;
 
     info!("USB Task started");
@@ -51,12 +54,7 @@ pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
     }
 }
 
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
-static OUTGOING: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
-static _INGOING: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
-
 use embassy_usb::class::cdc_acm::{Receiver, Sender};
-use esp_hal::otg_fs::asynch::Driver;
 
 #[embassy_executor::task]
 async fn usb_receiver_task(mut receiver: Receiver<'static, Driver<'static>>) {
@@ -65,8 +63,8 @@ async fn usb_receiver_task(mut receiver: Receiver<'static, Driver<'static>>) {
 
         let raw_frame = match read_frame(&mut receiver).await {
             Ok(raw_frame) => raw_frame,
-            Err(e) => {
-                info!("Error reading frame: {:?}", e);
+            Err(err) => {
+                info!("Error reading frame: {}", err);
                 continue;
             }
         };
@@ -82,7 +80,7 @@ async fn usb_receiver_task(mut receiver: Receiver<'static, Driver<'static>>) {
         let hello = alloc::format!("{:?}", payload);
         info!("{}", hello.as_str());
 
-        _INGOING.send(payload).await;
+        IN_CHANNEL.send(payload).await;
     }
 }
 
@@ -90,15 +88,13 @@ async fn usb_receiver_task(mut receiver: Receiver<'static, Driver<'static>>) {
 async fn usb_sender_task(mut class: Sender<'static, Driver<'static>>) {
     loop {
         class.wait_connection().await;
-        let frame = encode_message(OUTGOING.receive().await);
+        let frame = encode_message(OUT_CHANNEL.receive().await);
 
         if let Err(err) = class.write_packet(&frame).await {
             defmt::warn!("Write error: {}", err);
         }
     }
 }
-
-use shared_types::protocol::{Envelope, read_frame};
 
 fn decode_message(payload: &Vec<u8>) -> Result<Envelope, String> {
     let data = payload.as_slice();

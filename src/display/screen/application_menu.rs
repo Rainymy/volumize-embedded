@@ -1,3 +1,4 @@
+#![allow(unused)]
 use alloc::{format, vec};
 
 use embedded_graphics::{
@@ -10,7 +11,7 @@ use embedded_graphics::{
 use crate::{
     InputEvent, RotationEvent,
     display::{
-        Screen,
+        DEVICES_LIST, Screen,
         adjust_volume::VolumeAdjustState,
         screen::Transition,
         style::{Align, Flexbox, Insets, Style},
@@ -66,8 +67,8 @@ where
     let width = display_width / 3;
     let height = font_height * 2;
 
-    let flexbox = Flexbox::new(display.bounding_box(), 0i32);
-    let items = flexbox.vertical(&vec![1; ApplicationMenuState::MENU_ITEM_COUNT]);
+    // let flexbox = Flexbox::new(display.bounding_box(), 0i32);
+    // let items = flexbox.vertical(&vec![1; ApplicationMenuState::MENU_ITEM_COUNT]);
 
     let style = Style::new(BinaryColor::On)
         .padding(Insets::all(2))
@@ -80,16 +81,26 @@ where
         .background(BinaryColor::On)
         .color(BinaryColor::Off);
 
-    for (i, size) in items.into_iter().enumerate() {
-        let point = Point::new((display_width / 2 - width / 2) as i32, size.top_left.y);
+    let devices = critical_section::with(|cs| DEVICES_LIST.borrow(cs).borrow().clone());
+
+    for (i, device) in devices.into_iter().enumerate() {
+        let point = Point::new(
+            (display_width / 2 - width / 2) as i32,
+            (font_height * (i as u32)) as i32,
+        );
         let area = Rectangle::new(point, Size::new(width, height));
-        // let area = style.paint(display, area)?;
+        let text = &device.friendly_name;
 
         if i == state.selected.value() as usize {
             let area = style_selected.paint(display, area)?;
-            style_selected.draw_text(display, area, &format!("Menu {}", i + 1), text_style.font)?;
+            style_selected.draw_text(
+                display,
+                area,
+                &format!("{text} {}", i + 1),
+                text_style.font,
+            )?;
         } else {
-            style.draw_text(display, area, &format!("Menu {}", i + 1), text_style.font)?;
+            style.draw_text(display, area, &format!("{text} {}", i + 1), text_style.font)?;
         }
 
         // style.draw_text(display, area, &format!("Menu {}", i + 1), text_style.font)?;

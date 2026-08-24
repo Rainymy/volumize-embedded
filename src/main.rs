@@ -33,6 +33,14 @@ pub use input::{ButtonTracker, InputEvent, RotaryTracker, RotationEvent};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
+use shared_types::protocol::Envelope;
+
+use crate::display::update_information;
+
+pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
+pub static IN_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
+
 #[esp_rtos::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
@@ -87,9 +95,14 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut rotary_tracker = RotaryTracker::default();
 
     let mut ui_state = display::UIState::new();
+    let in_receiver = IN_CHANNEL.receiver();
 
     info!("Entering main loop");
     loop {
+        if let Ok(envelope) = in_receiver.try_receive() {
+            update_information(envelope).await;
+        };
+
         let value = input::read_rotation_value();
         if let Some(event) = rotary_tracker.poll(value as i16) {
             // info!("Rotary event: {}", event);
