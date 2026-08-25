@@ -14,10 +14,14 @@ impl WrappingInt {
     }
 
     pub fn next(&mut self) {
-        self.value = (self.value + 1).rem_euclid(self.max_value);
+        if self.max_value != 0 {
+            self.value = (self.value + 1).rem_euclid(self.max_value);
+        }
     }
 
     pub fn prev(&mut self) {
-        self.value = (self.value - 1).rem_euclid(self.max_value);
+        if self.max_value != 0 {
+            self.value = (self.value - 1).rem_euclid(self.max_value);
+        }
     }
 }
