@@ -16,6 +16,7 @@ pub use screen::*;
 
 use alloc::vec::Vec;
 use alloc::{collections::BTreeMap, string::String};
+use shared_types::{AudioVolume, SessionDirection};
 
 use core::cell::RefCell;
 use critical_section::Mutex;
@@ -139,5 +140,42 @@ fn update_event(event: UpdateChange) {
 }
 
 pub async fn get_devices() -> Vec<AudioDevice> {
-    critical_section::with(|cs| DEVICES_LIST.borrow_ref(cs).to_vec())
+    use alloc::string::ToString;
+
+    Vec::from([
+        AudioDevice {
+            id: "speaker".to_string(),
+            name: "Speaker".to_string(),
+            friendly_name: "Speaker".to_string(),
+            direction: SessionDirection::Render,
+            is_default: false,
+            volume: AudioVolume::new(0.3),
+        },
+        AudioDevice {
+            id: "headphones".to_string(),
+            name: "Headphones".to_string(),
+            friendly_name: "Headphones".to_string(),
+            direction: SessionDirection::Render,
+            is_default: true,
+            volume: AudioVolume::new(0.5),
+        },
+        AudioDevice {
+            id: "asus_v231".to_string(),
+            name: "ASUS V231".to_string(),
+            friendly_name: "ASUS V231".to_string(),
+            direction: SessionDirection::Render,
+            is_default: false,
+            volume: AudioVolume::new(0.7),
+        },
+        AudioDevice {
+            id: "asus_v232".to_string(),
+            name: "Samsung Tv".to_string(),
+            friendly_name: "Samsung Tv".to_string(),
+            direction: SessionDirection::Render,
+            is_default: false,
+            volume: AudioVolume::new(0.7),
+        },
+    ])
+
+    // critical_section::with(|cs| DEVICES_LIST.borrow_ref(cs).to_vec())
 }
