@@ -13,6 +13,7 @@ use crate::{
     display::{
         DEVICES_LIST, Screen,
         adjust_volume::VolumeAdjustState,
+        get_devices,
         screen::Transition,
         style::{Align, Flexbox, Insets, Style},
         system_menu::SystemMenuState,
@@ -36,7 +37,7 @@ impl ApplicationMenuState {
     }
 }
 
-pub fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEvent) -> Transition {
+pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEvent) -> Transition {
     match event {
         InputEvent::Rotation(RotationEvent::Next) => {
             state.selected.next();
@@ -50,7 +51,12 @@ pub fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEvent) -> 
             0 => Transition::Push(Screen::VolumeAdjust(VolumeAdjustState::default())),
             _ => Transition::Stay,
         },
-        InputEvent::LongPress => Transition::Push(Screen::SystemMenu(SystemMenuState::new())),
+        InputEvent::LongPress => {
+            let devices = get_devices().await;
+            Transition::Push(Screen::SystemMenu(SystemMenuState::new(
+                devices.len() as i32
+            )))
+        }
         _ => Transition::Ignored,
     }
 }

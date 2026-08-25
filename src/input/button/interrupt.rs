@@ -1,5 +1,6 @@
 use alloc::vec::Vec;
 use core::cell::{Cell, RefCell};
+use embassy_futures::block_on;
 
 use critical_section::Mutex;
 use esp_hal::gpio::{AnyPin, Input};
@@ -44,12 +45,12 @@ pub fn interrupt_handler(cs: critical_section::CriticalSection) {
 
 pub fn with_edge_queue<F>(mut f: F)
 where
-    F: FnMut(bool, u64),
+    F: AsyncFnMut(bool, u64),
 {
     critical_section::with(|cs| {
         let mut queue = EDGE_QUEUE.borrow_ref_mut(cs);
         for (is_down, timestamp) in queue.iter() {
-            f(*is_down, *timestamp);
+            block_on(f(*is_down, *timestamp));
         }
         queue.clear();
     });

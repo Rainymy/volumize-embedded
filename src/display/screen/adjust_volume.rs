@@ -15,7 +15,7 @@ pub struct VolumeAdjustState {
     pub value: i32,
 }
 
-pub fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEvent) -> Transition {
+pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEvent) -> Transition {
     match event {
         InputEvent::Rotation(RotationEvent::Next) => {
             state.value = (state.value + 1).min(100);

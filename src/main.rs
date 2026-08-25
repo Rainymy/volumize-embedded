@@ -105,21 +105,21 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
 
         let value = input::read_rotation_value();
         if let Some(event) = rotary_tracker.poll(value as i16) {
-            // info!("Rotary event: {}", event);
-            display::handle_event(&mut ui_state, event);
+            info!("Rotary event: {}", event);
+            display::handle_event(&mut ui_state, event).await;
         }
 
-        input::with_edge_queue(|is_down, timestamp| {
+        input::with_edge_queue(async |is_down, timestamp| {
             if let Some(event) = button_tracker.on_edge(is_down, timestamp) {
                 info!("Edge event: {}", event);
-                display::handle_event(&mut ui_state, event);
+                display::handle_event(&mut ui_state, event).await;
             }
         });
 
         let now_ms = Instant::now().duration_since_epoch().as_millis();
         if let Some(button_state) = button_tracker.check_timeouts(now_ms) {
             info!("Timeout event: {}", button_state);
-            display::handle_event(&mut ui_state, button_state);
+            display::handle_event(&mut ui_state, button_state).await;
         }
 
         let current_screen: display::Screen = ui_state.current().clone();

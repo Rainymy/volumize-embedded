@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WrappingInt {
-    value: i32,
-    max_value: i32,
+    pub value: i32,
+    pub max_value: i32,
 }
 
 impl WrappingInt {

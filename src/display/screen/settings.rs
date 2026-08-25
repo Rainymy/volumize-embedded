@@ -27,7 +27,7 @@ impl SettingsState {
     }
 }
 
-pub fn handle_settings(_state: &mut SettingsState, event: InputEvent) -> Transition {
+pub async fn handle_settings(_state: &mut SettingsState, event: InputEvent) -> Transition {
     match event {
         InputEvent::LongPress => Transition::Pop,
         InputEvent::Rotation(RotationEvent::Next) => {
