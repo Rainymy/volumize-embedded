@@ -6,8 +6,10 @@ use embedded_graphics::{
 use crate::{
     InputEvent, RotationEvent,
     display::{
-        Screen::Settings,
-        Transition, get_devices,
+        Screen::{ApplicationList, Settings},
+        Transition,
+        application_menu::ApplicationMenuState,
+        get_applications, get_devices,
         settings::SettingsState,
         style::{Align, Flexbox, Insets, Style},
         text_style::TextStyle,
@@ -45,7 +47,14 @@ pub async fn handle_system_menu(state: &mut SystemMenuState, event: InputEvent) 
             if state.value.value() == state.count - 1 {
                 Transition::Push(Settings(SettingsState::new()))
             } else {
-                Transition::Stay
+                let devices = get_devices().await;
+                let device_id = devices
+                    .get(state.value.value() as usize)
+                    .map(|d| d.id.clone());
+                let applications = get_applications(device_id).await;
+
+                let menu_state = ApplicationMenuState::new(applications.len());
+                Transition::Push(ApplicationList(menu_state))
             }
         }
         InputEvent::LongPress => Transition::Pop,
