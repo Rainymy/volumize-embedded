@@ -233,6 +233,14 @@ pub async fn populate_dummy_data() {
                 is_default: false,
                 volume: AudioVolume::new(0.7),
             },
+            AudioDevice {
+                id: "asus_v233".to_string(),
+                name: "Green Apple".to_string(),
+                friendly_name: "Green Apple".to_string(),
+                direction: SessionDirection::Render,
+                is_default: false,
+                volume: AudioVolume::new(0.7),
+            },
         ]);
 
         let application = Vec::from([
