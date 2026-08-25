@@ -51,9 +51,9 @@ pub async fn handle_system_menu(state: &mut SystemMenuState, event: InputEvent) 
                 let device_id = devices
                     .get(state.value.value() as usize)
                     .map(|d| d.id.clone());
-                let applications = get_applications(device_id).await;
+                let applications = get_applications(device_id.clone()).await;
 
-                let menu_state = ApplicationMenuState::new(applications.len());
+                let menu_state = ApplicationMenuState::new(applications.len(), device_id);
                 Transition::Push(ApplicationList(menu_state))
             }
         }

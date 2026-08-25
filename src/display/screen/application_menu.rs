@@ -1,5 +1,6 @@
 #![allow(unused)]
-use alloc::{format, vec};
+use alloc::vec;
+use alloc::{format, vec::Vec};
 
 use embedded_graphics::{
     draw_target::DrawTarget,
@@ -7,33 +8,35 @@ use embedded_graphics::{
     pixelcolor::BinaryColor,
     primitives::Rectangle,
 };
+use shared_types::DeviceIdentifier;
 
 use crate::{
     InputEvent, RotationEvent,
     display::{
-        DEVICES_LIST, Screen,
+        DEVICES_LIST, Percentage, Screen,
         adjust_volume::VolumeAdjustState,
-        get_devices,
+        get_applications, get_device_by_id, get_devices,
         screen::Transition,
         style::{Align, Flexbox, Insets, Style},
         system_menu::SystemMenuState,
         text_style::TextStyle,
         util::WrappingInt,
+        widget::rounded_rectangle,
     },
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplicationMenuState {
     pub selected: WrappingInt,
     pub application_count: usize,
+    pub device_id: Option<DeviceIdentifier>,
 }
 
 impl ApplicationMenuState {
-    pub const MENU_ITEM_COUNT: usize = 3;
-
-    pub fn new(application_count: usize) -> Self {
+    pub fn new(application_count: usize, device_id: Option<DeviceIdentifier>) -> Self {
         Self {
             selected: WrappingInt::new(0, application_count as i32),
+            device_id,
             application_count,
         }
     }
@@ -49,10 +52,10 @@ pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEven
             state.selected.prev();
             Transition::Stay
         }
-        InputEvent::SingleClick => match state.selected.value() {
-            0 => Transition::Push(Screen::VolumeAdjust(VolumeAdjustState::default())),
-            _ => Transition::Stay,
-        },
+        InputEvent::SingleClick => {
+            let state = VolumeAdjustState::new(state.selected.value());
+            return Transition::Push(Screen::VolumeAdjust(state));
+        }
         InputEvent::LongPress => {
             let devices = get_devices().await;
             Transition::Push(Screen::SystemMenu(SystemMenuState::new(
@@ -67,51 +70,48 @@ pub async fn render<D>(display: &mut D, state: ApplicationMenuState) -> Result<(
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {
-    let display_width = display.size().width as u32;
+    let device_id = state.device_id;
 
-    let text_style = TextStyle::Small.value();
-    let font_height = text_style.font.character_size.height;
+    // no device, no applications
+    let device = get_device_by_id(device_id.clone()).await;
+    let applications = get_applications(device_id.clone()).await;
 
-    let width = display_width / 3;
-    let height = font_height * 2;
+    let display_height = display.size().height as u32;
 
-    // let flexbox = Flexbox::new(display.bounding_box(), 0i32);
-    // let items = flexbox.vertical(&vec![1; ApplicationMenuState::MENU_ITEM_COUNT]);
+    let total_count = applications.len() + if device.is_some() { 1 } else { 0 };
 
-    let style = Style::new(BinaryColor::On)
-        .padding(Insets::all(2))
-        .margin(Insets::all(2))
-        .border(2, BinaryColor::On)
-        .align(Align::Center);
+    #[derive(Clone, Default)]
+    struct PercentageState {
+        value: Percentage,
+    }
 
-    let style_selected = style
-        .clone()
-        .background(BinaryColor::On)
-        .color(BinaryColor::Off);
+    let mut percentage_state: Vec<PercentageState> = Vec::new();
 
-    let devices = critical_section::with(|cs| DEVICES_LIST.borrow(cs).borrow().clone());
+    if let Some(device) = device {
+        percentage_state.push(PercentageState {
+            value: Percentage::from_float(device.volume.current),
+        });
+    }
 
-    for (i, device) in devices.into_iter().enumerate() {
-        let point = Point::new(
-            (display_width / 2 - width / 2) as i32,
-            (font_height * (i as u32)) as i32,
-        );
-        let area = Rectangle::new(point, Size::new(width, height));
-        let text = &device.friendly_name;
+    for application in &applications {
+        percentage_state.push(PercentageState {
+            value: Percentage::from_float(application.volume.current),
+        });
+    }
 
-        if i == state.selected.value() as usize {
-            let area = style_selected.paint(display, area)?;
-            style_selected.draw_text(
-                display,
-                area,
-                &format!("{text} {}", i + 1),
-                text_style.font,
-            )?;
-        } else {
-            style.draw_text(display, area, &format!("{text} {}", i + 1), text_style.font)?;
-        }
+    // let text_style = TextStyle::Small.value();
+    // let font_height = text_style.font.character_size.height;
 
-        // style.draw_text(display, area, &format!("Menu {}", i + 1), text_style.font)?;
+    for (i, size) in vec![Size::new(40, display_height); total_count]
+        .into_iter()
+        .enumerate()
+    {
+        let mut percentage = percentage_state.get(i).cloned().unwrap_or_default();
+
+        let width = size.width as i32;
+        let coord = Point::new(i as i32 * width, 0);
+
+        let _ = rounded_rectangle(display, coord, size, &mut percentage.value);
     }
 
     Ok(())

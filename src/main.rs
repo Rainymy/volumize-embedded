@@ -101,7 +101,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     populate_dummy_data().await;
 
     let application_count = get_applications(None).await.len();
-    let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count));
+    let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count, None));
 
     let mut ui_state = display::UIState::new(root_screen);
     let in_receiver = IN_CHANNEL.receiver();

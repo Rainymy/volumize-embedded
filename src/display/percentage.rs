@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-#[derive(Debug, Clone, Copy, defmt::Format)]
+#[derive(Debug, Clone, Default, Copy, defmt::Format)]
 pub struct Percentage {
     value: f32,
 }

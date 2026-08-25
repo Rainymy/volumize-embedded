@@ -151,12 +151,43 @@ pub async fn get_applications(device_id: Option<DeviceIdentifier>) -> Vec<AudioA
                 .unwrap_or_default(),
         };
 
+        defmt::dbg!("{}", device_id.as_str());
+
         APPLICATIONS_LIST
             .borrow_ref(cs)
             .get(&device_id)
             .cloned()
             .unwrap_or_default()
     })
+}
+
+pub async fn get_default_device() -> Option<AudioDevice> {
+    critical_section::with(|cs| {
+        DEVICES_LIST
+            .borrow_ref(cs)
+            .iter()
+            .find(|item| item.is_default)
+            .cloned()
+    })
+}
+
+pub async fn get_device_by_id(device_id: Option<DeviceIdentifier>) -> Option<AudioDevice> {
+    match device_id {
+        Some(id) => {
+            let device = critical_section::with(|cs| {
+                DEVICES_LIST
+                    .borrow_ref(cs)
+                    .iter()
+                    .find(|item| item.id == id)
+                    .cloned()
+            });
+            match device {
+                Some(device) => Some(device),
+                None => get_default_device().await,
+            }
+        }
+        None => get_default_device().await,
+    }
 }
 
 pub async fn get_devices() -> Vec<AudioDevice> {

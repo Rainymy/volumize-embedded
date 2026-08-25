@@ -15,6 +15,12 @@ pub struct VolumeAdjustState {
     pub value: i32,
 }
 
+impl VolumeAdjustState {
+    pub fn new(value: i32) -> Self {
+        Self { value }
+    }
+}
+
 pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEvent) -> Transition {
     match event {
         InputEvent::Rotation(RotationEvent::Next) => {
