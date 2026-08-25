@@ -28,12 +28,6 @@ pub enum Screen {
     Settings(SettingsState),
 }
 
-impl Default for Screen {
-    fn default() -> Self {
-        Self::ApplicationList(ApplicationMenuState::new())
-    }
-}
-
 pub async fn handle_event(ui_state: &mut UIState, event: InputEvent) {
     let transition = match ui_state.current_mut() {
         Screen::ApplicationList(state) => handle_main_menu(state, event).await,

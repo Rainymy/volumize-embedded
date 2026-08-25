@@ -36,7 +36,9 @@ esp_bootloader_esp_idf::esp_app_desc!();
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use shared_types::protocol::Envelope;
 
-use crate::display::update_information;
+use crate::display::{
+    Screen, application_menu::ApplicationMenuState, get_applications, update_information,
+};
 
 pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
 pub static IN_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
@@ -94,7 +96,10 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut button_tracker = ButtonTracker::default();
     let mut rotary_tracker = RotaryTracker::default();
 
-    let mut ui_state = display::UIState::new();
+    let application_count = get_applications(None).await.len();
+    let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count));
+
+    let mut ui_state = display::UIState::new(root_screen);
     let in_receiver = IN_CHANNEL.receiver();
 
     info!("Entering main loop");
@@ -109,17 +114,21 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             display::handle_event(&mut ui_state, event).await;
         }
 
-        input::with_edge_queue(async |is_down, timestamp| {
-            if let Some(event) = button_tracker.on_edge(is_down, timestamp) {
-                info!("Edge event: {}", event);
-                display::handle_event(&mut ui_state, event).await;
-            }
-        });
+        {
+            // These 2 calls work together to handle button edge and timeout events.
+            input::with_edge_queue(async |is_down, timestamp| {
+                if let Some(event) = button_tracker.on_edge(is_down, timestamp) {
+                    info!("Edge event: {}", event);
+                    display::handle_event(&mut ui_state, event).await;
+                }
+            })
+            .await;
 
-        let now_ms = Instant::now().duration_since_epoch().as_millis();
-        if let Some(button_state) = button_tracker.check_timeouts(now_ms) {
-            info!("Timeout event: {}", button_state);
-            display::handle_event(&mut ui_state, button_state).await;
+            let now_ms = Instant::now().duration_since_epoch().as_millis();
+            if let Some(button_state) = button_tracker.check_timeouts(now_ms) {
+                info!("Timeout event: {}", button_state);
+                display::handle_event(&mut ui_state, button_state).await;
+            }
         }
 
         let current_screen: display::Screen = ui_state.current().clone();

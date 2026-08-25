@@ -1,4 +1,4 @@
-use super::{ApplicationMenuState, Screen};
+use super::Screen;
 use alloc::vec::Vec;
 
 pub struct UIState {
@@ -6,11 +6,10 @@ pub struct UIState {
 }
 
 impl UIState {
-    pub fn new() -> Self {
-        let mut inner = Vec::new();
-        inner.push(Screen::ApplicationList(ApplicationMenuState::new()));
-
-        Self { stack: inner }
+    pub fn new(root: Screen) -> Self {
+        Self {
+            stack: Vec::from([root]),
+        }
     }
 
     pub fn push(&mut self, screen: Screen) {
