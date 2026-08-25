@@ -16,7 +16,7 @@ pub use screen::*;
 
 use alloc::vec::Vec;
 use alloc::{collections::BTreeMap, string::String};
-use shared_types::{AudioVolume, SessionDirection};
+use shared_types::{AudioVolume, ProcessInfo, SessionDirection, SessionType};
 
 use core::cell::RefCell;
 use critical_section::Mutex;
@@ -139,43 +139,133 @@ fn update_event(event: UpdateChange) {
     }
 }
 
+pub async fn get_applications(device_id: Option<DeviceIdentifier>) -> Vec<AudioApplication> {
+    critical_section::with(|cs| {
+        let device_id = match device_id {
+            Some(id) => id,
+            None => DEVICES_LIST
+                .borrow_ref(cs)
+                .iter()
+                .find(|item| item.is_default)
+                .map(|item| item.id.clone())
+                .unwrap_or_default(),
+        };
+
+        APPLICATIONS_LIST
+            .borrow_ref(cs)
+            .get(&device_id)
+            .cloned()
+            .unwrap_or_default()
+    })
+}
+
 pub async fn get_devices() -> Vec<AudioDevice> {
-    use alloc::string::ToString;
+    critical_section::with(|cs| DEVICES_LIST.borrow_ref(cs).to_vec())
+}
 
-    Vec::from([
-        AudioDevice {
-            id: "speaker".to_string(),
-            name: "Speaker".to_string(),
-            friendly_name: "Speaker".to_string(),
-            direction: SessionDirection::Render,
-            is_default: false,
-            volume: AudioVolume::new(0.3),
-        },
-        AudioDevice {
-            id: "headphones".to_string(),
-            name: "Headphones".to_string(),
-            friendly_name: "Headphones".to_string(),
-            direction: SessionDirection::Render,
-            is_default: true,
-            volume: AudioVolume::new(0.5),
-        },
-        AudioDevice {
-            id: "asus_v231".to_string(),
-            name: "ASUS V231".to_string(),
-            friendly_name: "ASUS V231".to_string(),
-            direction: SessionDirection::Render,
-            is_default: false,
-            volume: AudioVolume::new(0.7),
-        },
-        AudioDevice {
-            id: "asus_v232".to_string(),
-            name: "Samsung Tv".to_string(),
-            friendly_name: "Samsung Tv".to_string(),
-            direction: SessionDirection::Render,
-            is_default: false,
-            volume: AudioVolume::new(0.7),
-        },
-    ])
+pub async fn populate_dummy_data() {
+    critical_section::with(|cs| {
+        use alloc::string::ToString;
 
-    // critical_section::with(|cs| DEVICES_LIST.borrow_ref(cs).to_vec())
+        let default_device_id = "headphones".to_string();
+
+        let dummy_devices = Vec::from([
+            AudioDevice {
+                id: "speaker".to_string(),
+                name: "Speaker".to_string(),
+                friendly_name: "Speaker".to_string(),
+                direction: SessionDirection::Render,
+                is_default: false,
+                volume: AudioVolume::new(0.3),
+            },
+            AudioDevice {
+                id: default_device_id.clone(),
+                name: default_device_id.clone(),
+                friendly_name: default_device_id.clone(),
+                direction: SessionDirection::Render,
+                is_default: true,
+                volume: AudioVolume::new(0.5),
+            },
+            AudioDevice {
+                id: "asus_v231".to_string(),
+                name: "ASUS V231".to_string(),
+                friendly_name: "ASUS V231".to_string(),
+                direction: SessionDirection::Render,
+                is_default: false,
+                volume: AudioVolume::new(0.7),
+            },
+            AudioDevice {
+                id: "asus_v232".to_string(),
+                name: "Samsung Tv".to_string(),
+                friendly_name: "Samsung Tv".to_string(),
+                direction: SessionDirection::Render,
+                is_default: false,
+                volume: AudioVolume::new(0.7),
+            },
+        ]);
+
+        let application = Vec::from([
+            AudioApplication {
+                device_id: default_device_id.clone(),
+                process: ProcessInfo {
+                    id: 100,
+                    name: "Steam".to_string(),
+                    path: None,
+                },
+                session_type: SessionType::Application,
+                direction: SessionDirection::Render,
+                volume: AudioVolume::new(0.5),
+            },
+            AudioApplication {
+                device_id: default_device_id.clone(),
+                process: ProcessInfo {
+                    id: 100,
+                    name: "Firefox".to_string(),
+                    path: None,
+                },
+                session_type: SessionType::Application,
+                direction: SessionDirection::Render,
+                volume: AudioVolume::new(0.5),
+            },
+            AudioApplication {
+                device_id: default_device_id.clone(),
+                process: ProcessInfo {
+                    id: 100,
+                    name: "Discord".to_string(),
+                    path: None,
+                },
+                session_type: SessionType::Application,
+                direction: SessionDirection::Render,
+                volume: AudioVolume::new(0.5),
+            },
+            AudioApplication {
+                device_id: default_device_id.clone(),
+                process: ProcessInfo {
+                    id: 100,
+                    name: "RPG.exe".to_string(),
+                    path: None,
+                },
+                session_type: SessionType::Application,
+                direction: SessionDirection::Render,
+                volume: AudioVolume::new(0.5),
+            },
+        ]);
+
+        let application_ids = application
+            .iter()
+            .map(|app| app.process.id)
+            .collect::<Vec<_>>();
+
+        let mut applications_list = APPLICATIONS_LIST.borrow_ref_mut(cs);
+        applications_list.clear();
+        applications_list.insert(default_device_id.clone(), application);
+
+        let mut applications_id_list = APPLICATIONS_ID_LIST.borrow_ref_mut(cs);
+        applications_id_list.clear();
+        applications_id_list.insert(default_device_id.clone(), application_ids);
+
+        let mut vef = DEVICES_LIST.borrow_ref_mut(cs);
+        vef.clear();
+        vef.extend(dummy_devices);
+    });
 }
