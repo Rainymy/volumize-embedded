@@ -25,14 +25,16 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApplicationMenuState {
     pub selected: WrappingInt,
+    pub application_count: usize,
 }
 
 impl ApplicationMenuState {
     pub const MENU_ITEM_COUNT: usize = 3;
 
-    pub fn new() -> Self {
+    pub fn new(application_count: usize) -> Self {
         Self {
-            selected: WrappingInt::new(0, Self::MENU_ITEM_COUNT as i32),
+            selected: WrappingInt::new(0, application_count as i32),
+            application_count,
         }
     }
 }
