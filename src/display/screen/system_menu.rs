@@ -1,4 +1,3 @@
-use alloc::{format, vec};
 use embedded_graphics::{
     draw_target::DrawTarget, geometry::OriginDimensions, pixelcolor::BinaryColor,
 };
@@ -11,9 +10,8 @@ use crate::{
         application_menu::ApplicationMenuState,
         get_applications, get_devices,
         settings::SettingsState,
-        style::{Align, Flexbox, Insets, Style},
-        text_style::TextStyle,
         util::WrappingInt,
+        widget::{ScrollState, ScrollableList},
     },
 };
 
@@ -21,6 +19,7 @@ use crate::{
 pub struct SystemMenuState {
     pub value: WrappingInt,
     pub count: i32,
+    pub scroll: ScrollState,
 }
 
 impl SystemMenuState {
@@ -29,6 +28,7 @@ impl SystemMenuState {
         Self {
             value: WrappingInt::new(0, menu_count),
             count: menu_count,
+            scroll: ScrollState::default(),
         }
     }
 }
@@ -62,67 +62,21 @@ pub async fn handle_system_menu(state: &mut SystemMenuState, event: InputEvent) 
     }
 }
 
-pub async fn render<D>(display: &mut D, state: SystemMenuState) -> Result<(), D::Error>
+pub async fn render<D>(display: &mut D, state: &mut SystemMenuState) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {
+    // items per window
+    let window_size = 3;
+
     let devices = get_devices().await;
-    let font_style = TextStyle::Medium.value();
+    let scrollable = ScrollableList::new(&devices, |d| d.friendly_name.clone(), window_size)
+        .with_trailing("Settings");
 
-    let flexbox = Flexbox::new(display.bounding_box(), 2i32);
-    let allocated_flexbox = flexbox.vertical(&vec![1; 3]);
-    let window_size = allocated_flexbox.len();
-
-    let current_selected = state.value.value() as usize;
-    let total = state.count as usize;
-
-    let max_offset = total.saturating_sub(window_size);
-    let offset = current_selected
-        .saturating_sub(window_size.saturating_sub(1))
-        .min(max_offset);
-
-    let selected_local = current_selected - offset;
-
-    let style = Style::new(BinaryColor::On)
-        .color(BinaryColor::On)
-        .margin(Insets::new(0, 0, 2, 2))
-        .padding(Insets::all(2))
-        .align(Align::Center);
-
-    let style_active = style
-        .clone()
-        .color(BinaryColor::Off)
-        .background(BinaryColor::On)
-        .radius_all(4)
-        .margin(Insets::new(0, 0, 4, 4))
-        .border(2, BinaryColor::On);
-
-    for (i, area) in allocated_flexbox.into_iter().enumerate() {
-        let absolute_index = i + offset;
-
-        if let Some(device) = devices.get(absolute_index) {
-            let text = format!("{}", device.friendly_name);
-
-            if i == selected_local {
-                let font_style = TextStyle::BoldMedium.value();
-                let area = style_active.paint(display, area)?;
-                style_active.draw_text(display, area, &text, font_style.font)?;
-            } else {
-                style.draw_text(display, area, &text, font_style.font)?;
-            }
-        }
-
-        // Last index is the settings entry
-        if absolute_index + 1 == total {
-            if current_selected + 1 == total {
-                let font_style = TextStyle::BoldMedium.value();
-                let area = style_active.paint(display, area)?;
-                style_active.draw_text(display, area, "Settings", font_style.font)?;
-            } else {
-                style.draw_text(display, area, "Settings", font_style.font)?;
-            }
-        }
-    }
-
-    Ok(())
+    scrollable.render(
+        display,
+        display.bounding_box(),
+        &mut state.scroll,
+        state.value.value() as usize,
+    )
 }

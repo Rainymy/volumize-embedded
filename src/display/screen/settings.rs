@@ -42,7 +42,7 @@ pub async fn handle_settings(_state: &mut SettingsState, event: InputEvent) -> T
     }
 }
 
-pub async fn render<D>(display: &mut D, state: SettingsState) -> Result<(), D::Error>
+pub async fn render<D>(display: &mut D, state: &mut SettingsState) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {

@@ -1,26 +1,18 @@
-#![allow(unused)]
 use alloc::vec;
-use alloc::{format, vec::Vec};
+use alloc::vec::Vec;
 
 use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::{OriginDimensions, Point, Size},
     pixelcolor::BinaryColor,
-    primitives::Rectangle,
 };
 use shared_types::DeviceIdentifier;
 
 use crate::{
     InputEvent, RotationEvent,
     display::{
-        DEVICES_LIST, Percentage, Screen,
-        adjust_volume::VolumeAdjustState,
-        get_applications, get_device_by_id, get_devices,
-        screen::Transition,
-        style::{Align, Flexbox, Insets, Style},
-        system_menu::SystemMenuState,
-        text_style::TextStyle,
-        util::WrappingInt,
+        Percentage, Screen, adjust_volume::VolumeAdjustState, get_applications, get_device_by_id,
+        get_devices, screen::Transition, system_menu::SystemMenuState, util::WrappingInt,
         widget::rounded_rectangle,
     },
 };
@@ -54,23 +46,22 @@ pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEven
         }
         InputEvent::SingleClick => {
             let state = VolumeAdjustState::new(state.selected.value());
-            return Transition::Push(Screen::VolumeAdjust(state));
+            Transition::Push(Screen::VolumeAdjust(state))
         }
         InputEvent::LongPress => {
             let devices = get_devices().await;
-            Transition::Push(Screen::SystemMenu(SystemMenuState::new(
-                devices.len() as i32
-            )))
+            let state = SystemMenuState::new(devices.len() as i32);
+            Transition::Push(Screen::SystemMenu(state))
         }
         _ => Transition::Ignored,
     }
 }
 
-pub async fn render<D>(display: &mut D, state: ApplicationMenuState) -> Result<(), D::Error>
+pub async fn render<D>(display: &mut D, state: &mut ApplicationMenuState) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {
-    let device_id = state.device_id;
+    let device_id = state.device_id.clone();
 
     // no device, no applications
     let device = get_device_by_id(device_id.clone()).await;
@@ -98,9 +89,6 @@ where
             value: Percentage::from_float(application.volume.current),
         });
     }
-
-    // let text_style = TextStyle::Small.value();
-    // let font_height = text_style.font.character_size.height;
 
     for (i, size) in vec![Size::new(40, display_height); total_count]
         .into_iter()

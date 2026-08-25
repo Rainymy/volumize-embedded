@@ -21,7 +21,7 @@ where
     SIZE: DisplaySizeAsync,
     Self: DrawTarget<Color = BinaryColor>,
 {
-    async fn render(&mut self, screen: Screen) -> Result<(), u16> {
+    async fn render(&mut self, screen: &mut Screen) -> Result<(), u16> {
         if self.clear(BinaryColor::Off).is_err() {
             return Err(100);
         }
@@ -50,8 +50,8 @@ where
     DI: AsyncWriteOnlyDataCommand,
     SIZE: TerminalDisplaySizeAsync,
 {
-    async fn render(&mut self, _screen: Screen) -> Result<(), u16> {
-        let value = match &_screen {
+    async fn render(&mut self, screen: &mut Screen) -> Result<(), u16> {
+        let value = match &screen {
             Screen::VolumeAdjust(volume) => volume.value,
             Screen::ApplicationList(selected) => selected.selected.value(),
             _ => 57,

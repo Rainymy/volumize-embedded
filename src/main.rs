@@ -135,8 +135,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             }
         }
 
-        let current_screen: display::Screen = ui_state.current().clone();
-        if let Err(delay) = display::render(display, current_screen).await {
+        if let Err(delay) = display::render(display, ui_state.current_mut()).await {
             info!("render error from render: {}", delay);
         }
     }

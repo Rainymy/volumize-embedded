@@ -36,7 +36,7 @@ pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEve
     }
 }
 
-pub async fn render<D>(display: &mut D, state: VolumeAdjustState) -> Result<(), D::Error>
+pub async fn render<D>(display: &mut D, state: &mut VolumeAdjustState) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {
