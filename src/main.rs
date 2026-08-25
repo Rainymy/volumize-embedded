@@ -37,7 +37,8 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use shared_types::protocol::Envelope;
 
 use crate::display::{
-    Screen, application_menu::ApplicationMenuState, get_applications, update_information,
+    Screen, application_menu::ApplicationMenuState, get_applications, populate_dummy_data,
+    update_information,
 };
 
 pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
@@ -95,6 +96,9 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
 
     let mut button_tracker = ButtonTracker::default();
     let mut rotary_tracker = RotaryTracker::default();
+
+    // Populate dummy data to simulate applications.
+    populate_dummy_data().await;
 
     let application_count = get_applications(None).await.len();
     let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count));
