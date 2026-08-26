@@ -3,6 +3,7 @@ use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::{OriginDimensions, Point, Size},
     pixelcolor::BinaryColor,
+    primitives::Rectangle,
 };
 
 use crate::{
@@ -53,7 +54,8 @@ where
         let width = size.width as i32;
         let coord = Point::new(i as i32 * width, 0);
 
-        let _ = rounded_rectangle(display, coord, size, &mut percentage);
+        let area = Rectangle::new(coord, size);
+        let _ = rounded_rectangle(display, area, &mut percentage);
     }
 
     Ok(())

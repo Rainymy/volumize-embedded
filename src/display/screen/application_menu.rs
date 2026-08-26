@@ -5,6 +5,7 @@ use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::{OriginDimensions, Point, Size},
     pixelcolor::BinaryColor,
+    primitives::Rectangle,
 };
 use shared_types::DeviceIdentifier;
 
@@ -12,8 +13,8 @@ use crate::{
     InputEvent, RotationEvent,
     display::{
         Percentage, Screen, adjust_volume::VolumeAdjustState, get_applications, get_device_by_id,
-        get_devices, screen::Transition, system_menu::SystemMenuState, util::WrappingInt,
-        widget::rounded_rectangle,
+        get_devices, screen::Transition, style::Style, system_menu::SystemMenuState,
+        util::WrappingInt, widget::rounded_rectangle,
     },
 };
 
@@ -57,6 +58,23 @@ pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEven
     }
 }
 
+/// This is working so bad and wrong need to rework later
+fn draw_shadow<D>(display: &mut D, area: Rectangle) -> Result<(), D::Error>
+where
+    D: DrawTarget<Color = BinaryColor>,
+{
+    use crate::display::style::Insets;
+
+    let style = Style::new(BinaryColor::On)
+        .background(BinaryColor::On)
+        .margin(Insets::new(1, 0, 0, 1))
+        .radius_all(3)
+        .border(2, BinaryColor::On);
+
+    let _shadow = style.paint(display, area)?;
+    Ok(())
+}
+
 pub async fn render<D>(display: &mut D, state: &mut ApplicationMenuState) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
@@ -90,16 +108,23 @@ where
         });
     }
 
+    // Should convert this into flexblox in the future.
     for (i, size) in vec![Size::new(40, display_height); total_count]
         .into_iter()
         .enumerate()
     {
         let mut percentage = percentage_state.get(i).cloned().unwrap_or_default();
 
-        let width = size.width as i32;
-        let coord = Point::new(i as i32 * width, 0);
+        let offset_item = i * (size.width as usize);
+        let coord = Point::new(offset_item as i32, 0);
 
-        let _ = rounded_rectangle(display, coord, size, &mut percentage.value);
+        let area = Rectangle::new(coord, size);
+        if i == state.selected.value() as usize {
+            draw_shadow(display, area)?;
+            // continue;
+        }
+
+        rounded_rectangle(display, area, &mut percentage.value)?;
     }
 
     Ok(())

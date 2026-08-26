@@ -1,4 +1,3 @@
-use embedded_graphics::geometry::{Point, Size};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{draw_target::DrawTarget, primitives::Rectangle};
 
@@ -8,15 +7,13 @@ use crate::display::widget::{IconWidget, MuteIndicator, PercentageLabel, Vertica
 
 pub fn rounded_rectangle<D>(
     display: &mut D,
-    start: Point,
-    size: Size,
+    area: Rectangle,
     percentage: &mut Percentage,
 ) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor>,
 {
-    let bounding_box = display.bounding_box();
-    let coordinate = bounding_box.top_left + start;
+    let coordinate = area.top_left;
 
     let style = Style::new(BinaryColor::On)
         .padding_all(1)
@@ -26,7 +23,7 @@ where
         .radius_all(3)
         .align(Align::Center);
 
-    let allocated_area = Rectangle::new(coordinate, size);
+    let allocated_area = Rectangle::new(coordinate, area.size);
     let content_area = style.paint(display, allocated_area)?;
 
     let flexbox = Flexbox::new(content_area, 3i32);
