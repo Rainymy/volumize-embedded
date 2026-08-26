@@ -37,7 +37,7 @@ enum Axis {
 
 fn split(area: Rectangle, gap: i32, sizes: &[u32], axis: Axis) -> Vec<Rectangle> {
     if sizes.is_empty() {
-        return Vec::new();
+        return Vec::from([area]);
     }
 
     let total_weight: u32 = sizes.iter().sum();
