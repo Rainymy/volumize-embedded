@@ -96,42 +96,27 @@ impl<'a, T> ScrollableList<'a, T> {
         D: DrawTarget<Color = BinaryColor> + OriginDimensions,
     {
         self.update_offset(scroll, selected);
-        let offset = scroll.offset;
 
         let flexbox = Flexbox::new(area, 2i32);
         let allocated = flexbox.vertical(&vec![1; self.window_size]);
 
-        let total = self.total();
-
         for (index, row_area) in allocated.into_iter().enumerate() {
-            let absolute_index = index + offset;
-            if absolute_index >= total {
-                break;
-            }
-
+            let absolute_index = index + scroll.offset;
             let is_selected = absolute_index == selected;
-            let font_style = if is_selected {
-                TextStyle::BoldMedium.value()
-            } else {
-                TextStyle::Medium.value()
+
+            let text = match self.items.get(absolute_index) {
+                Some(item) => (self.label)(item),
+                None => self.trailing_label.unwrap_or_default().to_string(),
             };
 
-            let text: String = if absolute_index < self.items.len() {
-                (self.label)(&self.items.get(absolute_index).unwrap())
+            let (style, font_style) = if is_selected {
+                (self.style.active, TextStyle::BoldMedium.value())
             } else {
-                self.trailing_label.unwrap_or_default().to_string()
+                (self.style.normal, TextStyle::Medium.value())
             };
 
-            if is_selected {
-                let painted_area = self.style.active.paint(display, row_area)?;
-                self.style
-                    .active
-                    .draw_text(display, painted_area, &text, font_style.font)?;
-            } else {
-                self.style
-                    .normal
-                    .draw_text(display, row_area, &text, font_style.font)?;
-            }
+            let painted_area = style.paint(display, row_area)?;
+            style.draw_text(display, painted_area, &text, font_style.font)?;
         }
 
         Ok(())
