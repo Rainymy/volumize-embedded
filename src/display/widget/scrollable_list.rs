@@ -1,7 +1,4 @@
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::{string::String, vec};
 use embedded_graphics::{pixelcolor::BinaryColor, prelude::*, primitives::Rectangle};
 
 use crate::display::{
@@ -41,14 +38,14 @@ impl Default for ListStyle {
 
 pub struct ScrollableList<'a, T> {
     items: &'a [T],
-    label: fn(&T) -> String,
+    label: fn(&T) -> &String,
     trailing_label: Option<&'a str>,
     window_size: usize,
     style: ListStyle,
 }
 
 impl<'a, T> ScrollableList<'a, T> {
-    pub fn new(items: &'a [T], label: fn(&T) -> String, window_size: usize) -> Self {
+    pub fn new(items: &'a [T], label: fn(&T) -> &String, window_size: usize) -> Self {
         Self {
             items,
             label,
@@ -106,7 +103,7 @@ impl<'a, T> ScrollableList<'a, T> {
 
             let text = match self.items.get(absolute_index) {
                 Some(item) => (self.label)(item),
-                None => self.trailing_label.unwrap_or_default().to_string(),
+                None => self.trailing_label.unwrap_or_default(),
             };
 
             let (style, font_style) = if is_selected {

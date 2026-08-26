@@ -70,7 +70,7 @@ where
     let window_size = 3;
 
     let devices = get_devices().await;
-    let scrollable = ScrollableList::new(&devices, |d| d.friendly_name.clone(), window_size)
+    let scrollable = ScrollableList::new(&devices, |device| &device.friendly_name, window_size)
         .with_trailing("Settings");
 
     scrollable.render(
