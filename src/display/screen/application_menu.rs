@@ -46,7 +46,13 @@ pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEven
             Transition::Stay
         }
         InputEvent::SingleClick => {
-            let state = VolumeAdjustState::new(state.selected.value());
+            let device = get_device_by_id(state.device_id.clone()).await;
+            let applications = get_applications(state.device_id.clone()).await;
+
+            let absolute_index = state.selected.value() + if device.is_some() { -1 } else { 0 };
+            let application = applications.get(absolute_index as usize).cloned();
+
+            let state = VolumeAdjustState::new(state.selected.value(), application.unwrap());
             Transition::Push(Screen::VolumeAdjust(state))
         }
         InputEvent::LongPress => {

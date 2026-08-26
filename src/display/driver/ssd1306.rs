@@ -52,7 +52,7 @@ where
 {
     async fn render(&mut self, screen: &mut Screen) -> Result<(), u16> {
         let value = match &screen {
-            Screen::VolumeAdjust(volume) => volume.value,
+            Screen::VolumeAdjust(volume) => volume.value.value(),
             Screen::ApplicationList(selected) => selected.selected.value(),
             _ => 57,
         };
