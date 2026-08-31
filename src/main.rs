@@ -37,8 +37,10 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use shared_types::protocol::Envelope;
 
 use crate::display::{
-    Screen, application_menu::ApplicationMenuState, get_applications, populate_dummy_data,
-    update_information,
+    Screen,
+    adjust_volume::{RenderApplication, VolumeAdjustState},
+    application_menu::ApplicationMenuState,
+    get_applications, populate_dummy_data, update_information,
 };
 
 pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
@@ -100,10 +102,14 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     // Populate dummy data to simulate applications.
     populate_dummy_data().await;
 
-    let application_count = get_applications(None).await.len();
+    let application = get_applications(None).await;
+    let application_count = application.len();
+
     let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count, None));
+    let _application_state = VolumeAdjustState::new(30, RenderApplication::from(&application[0]));
 
     let mut ui_state = display::UIState::new(root_screen);
+    ui_state.push(Screen::VolumeAdjust(_application_state));
     let in_receiver = IN_CHANNEL.receiver();
 
     info!("Entering main loop");

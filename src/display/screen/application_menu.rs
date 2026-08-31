@@ -12,9 +12,14 @@ use shared_types::DeviceIdentifier;
 use crate::{
     InputEvent, RotationEvent,
     display::{
-        Percentage, Screen, adjust_volume::VolumeAdjustState, get_applications, get_device_by_id,
-        get_devices, screen::Transition, style::Style, system_menu::SystemMenuState,
-        util::WrappingInt, widget::rounded_rectangle,
+        Percentage, Screen,
+        adjust_volume::{RenderApplication, VolumeAdjustState},
+        get_applications, get_device_by_id, get_devices,
+        screen::Transition,
+        style::Style,
+        system_menu::SystemMenuState,
+        util::WrappingInt,
+        widget::rounded_rectangle,
     },
 };
 
@@ -46,13 +51,28 @@ pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEven
             Transition::Stay
         }
         InputEvent::SingleClick => {
-            let device = get_device_by_id(state.device_id.clone()).await;
-            let applications = get_applications(state.device_id.clone()).await;
+            async fn resolve_selection(state: &ApplicationMenuState) -> Option<RenderApplication> {
+                let selected = state.selected.value().cast_unsigned();
+                let device = get_device_by_id(state.device_id.clone()).await;
 
-            let absolute_index = state.selected.value() + if device.is_some() { -1 } else { 0 };
-            let application = applications.get(absolute_index as usize).cloned();
+                // Index 0 is the device entry, if a device is present.
+                if selected == 0 {
+                    if let Some(device) = &device {
+                        return Some(RenderApplication::from(device));
+                    }
+                }
 
-            let state = VolumeAdjustState::new(state.selected.value(), application.unwrap());
+                let applications = get_applications(state.device_id.clone()).await;
+                let offset = if device.is_some() { 1 } else { 0 };
+                let absolute_index = selected.saturating_sub(offset);
+
+                applications
+                    .get(absolute_index as usize)
+                    .map(RenderApplication::from)
+            }
+
+            let render_application = defmt::expect!(resolve_selection(state).await);
+            let state = VolumeAdjustState::new(state.selected.value(), render_application);
             Transition::Push(Screen::VolumeAdjust(state))
         }
         InputEvent::LongPress => {

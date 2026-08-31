@@ -184,28 +184,28 @@ impl<Color: PixelColor> Style<Color> {
 
     pub fn align_element_x(&self, parent: Rectangle, source_size: Size, align: Align) -> Rectangle {
         let topleftx = parent.top_left.x;
+        let width_offset = parent.size.width as i32 - source_size.width as i32;
 
         let x = match align {
             Align::Start => topleftx,
-            Align::Center => topleftx + (parent.size.width - source_size.width) as i32 / 2,
-            Align::End => topleftx + (parent.size.width - source_size.width) as i32,
+            Align::Center => topleftx + width_offset.saturating_div(2),
+            Align::End => topleftx + width_offset,
         };
 
-        let new_point = Point::new(x, parent.top_left.y);
-        Rectangle::new(new_point, source_size)
+        Rectangle::new(Point::new(x, parent.top_left.y), source_size)
     }
 
     pub fn align_element_y(&self, parent: Rectangle, source_size: Size, align: Align) -> Rectangle {
         let toplefty = parent.top_left.y;
+        let height_offset = parent.size.height as i32 - source_size.height as i32;
 
         let y = match align {
             Align::Start => toplefty,
-            Align::Center => toplefty + (parent.size.height - source_size.height) as i32 / 2,
-            Align::End => toplefty + (parent.size.height - source_size.height) as i32,
+            Align::Center => toplefty + height_offset.saturating_div(2),
+            Align::End => toplefty + height_offset,
         };
 
-        let new_point = Point::new(parent.top_left.x, y);
-        Rectangle::new(new_point, source_size)
+        Rectangle::new(Point::new(parent.top_left.x, y), source_size)
     }
 
     /// Paints the style onto the given target, within the specified area.
@@ -289,13 +289,13 @@ impl<Color: PixelColor> Style<Color> {
     ) -> Result<(), D::Error> {
         let img_size = bitmap.size();
 
-        let x = match self.align {
-            Align::Start => area.top_left.x,
-            Align::Center => area.top_left.x + (area.size.width as i32 - img_size.width as i32) / 2,
-            Align::End => area.top_left.x + area.size.width as i32 - img_size.width as i32,
-        };
-        let y = area.top_left.y + (area.size.height as i32 - img_size.height as i32) / 2;
-        let origin = Point::new(x, y);
+        let x = self.align_element_x(area, img_size, self.align);
+        let y = self
+            .align_element_y(area, img_size, Align::Center)
+            .top_left
+            .y;
+
+        let origin = Point::new(x.top_left.x, y);
 
         let pixels = bitmap
             .pixels()

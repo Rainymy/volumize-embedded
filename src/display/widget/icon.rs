@@ -15,6 +15,7 @@ impl<'a> IconWidget<'a> {
             color,
             style: Style::new(color.invert())
                 .background(color)
+                // .border(1, BinaryColor::On)
                 .align(Align::Center),
         }
     }

@@ -1,9 +1,12 @@
+use embedded_graphics::geometry::Size;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{draw_target::DrawTarget, primitives::Rectangle};
 
 use crate::display::Percentage;
 use crate::display::style::{Align, Bitmap, Flexbox, Style};
-use crate::display::widget::{IconWidget, MuteIndicator, PercentageLabel, VerticalSlider};
+use crate::display::widget::{
+    IconWidget, MuteIndicator, PercentageLabel, SliderAlign, VerticalSlider,
+};
 
 pub fn rounded_rectangle<D>(
     display: &mut D,
@@ -49,7 +52,19 @@ where
             }
             1 => IconWidget::new(Bitmap::new(&data, 16, 16), BinaryColor::Off)
                 .render(display, area)?,
-            2 => VerticalSlider::default().render(display, area, percentage)?,
+            2 => {
+                let style = Style::new(BinaryColor::On).align(Align::Center);
+
+                let target_size = Size::new(10, area.size.height);
+                let area = style.align_element_x(area, target_size, Align::Center);
+                let area = style.paint(display, area)?;
+                VerticalSlider::default().render(
+                    display,
+                    area,
+                    percentage,
+                    SliderAlign::Vertical,
+                )?
+            }
             3 => PercentageLabel::new(&font_4x6).render(display, area, percentage)?,
             4 => MuteIndicator::new(&font_4x6).render(display, area, true)?,
             _ => {}
