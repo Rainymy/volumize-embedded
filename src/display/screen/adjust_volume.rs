@@ -6,10 +6,13 @@ use embedded_graphics::{
     pixelcolor::BinaryColor,
     primitives::Rectangle,
 };
-use shared_types::{AudioApplication, AudioDevice, Identifier};
+use shared_types::{
+    AudioApplication, AudioDevice, Identifier,
+    protocol::{Command, Envelope},
+};
 
 use crate::{
-    InputEvent, RotationEvent,
+    InputEvent, OUT_CHANNEL, RotationEvent,
     display::{
         Percentage,
         screen::Transition,
@@ -68,18 +71,38 @@ impl VolumeAdjustState {
 pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEvent) -> Transition {
     match event {
         InputEvent::Rotation(RotationEvent::Next) => {
-            state.value.next();
+            state.value.next_clamped();
+            let percentage = Percentage::from_int(state.value.value() as u32);
+            OUT_CHANNEL
+                .send(Envelope::Command(Command::SetVolume {
+                    id: state.application.id.clone(),
+                    volume: percentage.to_float(),
+                }))
+                .await;
             Transition::Stay
         }
         InputEvent::Rotation(RotationEvent::Previous) => {
-            state.value.prev();
+            state.value.prev_clamped();
+            let percentage = Percentage::from_int(state.value.value() as u32);
+            OUT_CHANNEL
+                .send(Envelope::Command(Command::SetVolume {
+                    id: state.application.id.clone(),
+                    volume: percentage.to_float(),
+                }))
+                .await;
+            Transition::Stay
+        }
+        InputEvent::DoubleClick => {
+            state.application.is_muted = !state.application.is_muted;
+            OUT_CHANNEL
+                .send(Envelope::Command(Command::SetMute {
+                    id: state.application.id.clone(),
+                    mute: state.application.is_muted,
+                }))
+                .await;
             Transition::Stay
         }
         InputEvent::LongPress => Transition::Pop,
-        InputEvent::DoubleClick => {
-            state.application.is_muted = !state.application.is_muted;
-            Transition::Stay
-        }
         InputEvent::SingleClick => Transition::Ignored,
     }
 }
@@ -167,19 +190,6 @@ where
             _ => {}
         }
     }
-
-    // let display_size = display.size();
-    // let display_height = display_size.height as i32;
-    // let display_width = display_size.width as i32;
-    // let max_chars = ((display_width / 4).max(1)) as usize;
-
-    // Text::with_baseline(
-    //     &truncate_name(&state.application.name, max_chars),
-    //     Point::new(10, display_height - 10),
-    //     MonoTextStyle::new(&FONT_4X6, BinaryColor::On),
-    //     Baseline::Top,
-    // )
-    // .draw(display)?;
 
     Ok(())
 }
