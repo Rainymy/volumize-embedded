@@ -112,7 +112,6 @@ where
     let applications = get_applications(device_id.clone()).await;
 
     let display_height = display.size().height as u32;
-
     let total_count = applications.len() + if device.is_some() { 1 } else { 0 };
 
     #[derive(Clone, Default)]
@@ -120,18 +119,14 @@ where
         value: Percentage,
     }
 
-    let mut percentage_state: Vec<PercentageState> = Vec::new();
+    let mut render_state: Vec<RenderApplication> = Vec::new();
 
     if let Some(device) = device {
-        percentage_state.push(PercentageState {
-            value: Percentage::from_float(device.volume.current),
-        });
+        render_state.push(RenderApplication::from(&device));
     }
 
     for application in &applications {
-        percentage_state.push(PercentageState {
-            value: Percentage::from_float(application.volume.current),
-        });
+        render_state.push(RenderApplication::from(application));
     }
 
     // Should convert this into flexblox in the future.
@@ -139,7 +134,7 @@ where
         .into_iter()
         .enumerate()
     {
-        let mut percentage = percentage_state.get(i).cloned().unwrap_or_default();
+        let render = render_state.get(i).cloned().unwrap();
 
         let offset_item = i * (size.width as usize);
         let coord = Point::new(offset_item as i32, 0);
@@ -147,10 +142,9 @@ where
         let area = Rectangle::new(coord, size);
         if i == state.selected.value() as usize {
             draw_shadow(display, area)?;
-            // continue;
         }
 
-        rounded_rectangle(display, area, &mut percentage.value)?;
+        rounded_rectangle(display, area, render)?;
     }
 
     Ok(())
