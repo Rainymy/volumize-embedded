@@ -18,10 +18,21 @@ impl WrappingInt {
             self.value = (self.value + 1).rem_euclid(self.max_value);
         }
     }
-
     pub fn prev(&mut self) {
         if self.max_value != 0 {
             self.value = (self.value - 1).rem_euclid(self.max_value);
+        }
+    }
+
+    pub fn next_clamped(&mut self) {
+        if self.max_value != 0 {
+            self.value = (self.value + 1).min(self.max_value);
+        }
+    }
+
+    pub fn prev_clamped(&mut self) {
+        if self.max_value != 0 {
+            self.value = (self.value - 1).max(0);
         }
     }
 }

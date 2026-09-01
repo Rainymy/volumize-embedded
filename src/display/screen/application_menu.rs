@@ -1,10 +1,7 @@
-use alloc::vec;
 use alloc::vec::Vec;
 
 use embedded_graphics::{
-    draw_target::DrawTarget,
-    geometry::{OriginDimensions, Point, Size},
-    pixelcolor::BinaryColor,
+    draw_target::DrawTarget, geometry::OriginDimensions, pixelcolor::BinaryColor,
     primitives::Rectangle,
 };
 use shared_types::DeviceIdentifier;
@@ -12,11 +9,11 @@ use shared_types::DeviceIdentifier;
 use crate::{
     InputEvent, RotationEvent,
     display::{
-        Percentage, Screen,
+        Screen,
         adjust_volume::{RenderApplication, VolumeAdjustState},
         get_applications, get_device_by_id, get_devices,
         screen::Transition,
-        style::Style,
+        style::{Flexbox, Style},
         system_menu::SystemMenuState,
         util::WrappingInt,
         widget::rounded_rectangle,
@@ -26,6 +23,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplicationMenuState {
     pub selected: WrappingInt,
+    pub chunk_index: WrappingInt,
     pub application_count: usize,
     pub device_id: Option<DeviceIdentifier>,
 }
@@ -34,6 +32,7 @@ impl ApplicationMenuState {
     pub fn new(application_count: usize, device_id: Option<DeviceIdentifier>) -> Self {
         Self {
             selected: WrappingInt::new(0, application_count as i32),
+            chunk_index: WrappingInt::new(0, application_count.div_ceil(3) as i32),
             device_id,
             application_count,
         }
@@ -43,11 +42,11 @@ impl ApplicationMenuState {
 pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEvent) -> Transition {
     match event {
         InputEvent::Rotation(RotationEvent::Next) => {
-            state.selected.next();
+            state.selected.next_clamped();
             Transition::Stay
         }
         InputEvent::Rotation(RotationEvent::Previous) => {
-            state.selected.prev();
+            state.selected.prev_clamped();
             Transition::Stay
         }
         InputEvent::SingleClick => {
@@ -107,44 +106,34 @@ where
 {
     let device_id = state.device_id.clone();
 
-    // no device, no applications
     let device = get_device_by_id(device_id.clone()).await;
     let applications = get_applications(device_id.clone()).await;
 
-    let display_height = display.size().height as u32;
-    let total_count = applications.len() + if device.is_some() { 1 } else { 0 };
+    let render_state: Vec<RenderApplication> = device
+        .iter()
+        .map(RenderApplication::from)
+        .chain(applications.iter().map(RenderApplication::from))
+        .collect();
 
-    #[derive(Clone, Default)]
-    struct PercentageState {
-        value: Percentage,
-    }
+    let flexbox = Flexbox::new(display.bounding_box(), 0);
+    let allocated_area = flexbox.horizontal(&[1, 1, 1]);
 
-    let mut render_state: Vec<RenderApplication> = Vec::new();
+    let window_size = 3;
+    let selected = state.selected.value() as usize;
+    let chunk_index = selected.div_euclid(window_size);
 
-    if let Some(device) = device {
-        render_state.push(RenderApplication::from(&device));
-    }
+    let window = render_state
+        .chunks(window_size)
+        .nth(chunk_index)
+        .expect("selected index out of bounds");
 
-    for application in &applications {
-        render_state.push(RenderApplication::from(application));
-    }
-
-    // Should convert this into flexblox in the future.
-    for (i, size) in vec![Size::new(40, display_height); total_count]
-        .into_iter()
-        .enumerate()
-    {
-        let render = render_state.get(i).cloned().unwrap();
-
-        let offset_item = i * (size.width as usize);
-        let coord = Point::new(offset_item as i32, 0);
-
-        let area = Rectangle::new(coord, size);
-        if i == state.selected.value() as usize {
-            draw_shadow(display, area)?;
+    for (i, (area, render)) in allocated_area.iter().zip(window).enumerate() {
+        let absolute_index = chunk_index.saturating_mul(window_size).saturating_add(i);
+        if selected == absolute_index {
+            draw_shadow(display, *area)?;
         }
 
-        rounded_rectangle(display, area, render)?;
+        rounded_rectangle(display, *area, render.clone())?;
     }
 
     Ok(())
