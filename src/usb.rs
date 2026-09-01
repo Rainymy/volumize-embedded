@@ -90,8 +90,12 @@ async fn usb_sender_task(mut class: Sender<'static, Driver<'static>>) {
         class.wait_connection().await;
         let frame = encode_message(OUT_CHANNEL.receive().await);
 
-        if let Err(err) = class.write_packet(&frame).await {
-            defmt::warn!("Write error: {}", err);
+        let mut chunks = frame.chunks(class.max_packet_size() as usize);
+        while let Some(chunk) = chunks.next() {
+            if let Err(err) = class.write_packet(&chunk).await {
+                defmt::warn!("Write error: {}", err);
+                break;
+            }
         }
     }
 }
