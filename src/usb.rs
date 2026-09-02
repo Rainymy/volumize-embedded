@@ -5,6 +5,8 @@ use alloc::{
 use defmt::info;
 use esp_hal::otg_fs::{Usb, asynch::Driver};
 
+use crate::signal::notify_ready;
+
 use super::{IN_CHANNEL, OUT_CHANNEL};
 use shared_types::protocol::{Envelope, read_frame};
 
@@ -39,8 +41,11 @@ pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
         CONTROL_BUF.init([0u8; 64]),
     );
 
-    let class = CdcAcmClass::new(&mut builder, STATE.init(State::new()), 64);
+    let mut class = CdcAcmClass::new(&mut builder, STATE.init(State::new()), 64);
     let usb_device = builder.build();
+
+    class.wait_connection().await;
+    notify_ready();
 
     let (sender, receiver) = class.split();
 
