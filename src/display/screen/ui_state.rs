@@ -22,6 +22,7 @@ impl UIState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn current(&mut self) -> &Screen {
         debug_assert!(self.stack.len() != 0, "Navigation stack is empty");
         // It is safe to unwrap. The stack is never empty.

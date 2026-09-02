@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 mod driver;
 mod percentage;
 mod render;
@@ -36,7 +35,6 @@ pub static APPLICATIONS_LIST: Refs<Dict<Vec<AudioApplication>>> =
 pub static APPLICATIONS_ID_LIST: Refs<Dict<Vec<AppIdentifier>>> =
     Mutex::new(RefCell::new(BTreeMap::new()));
 
-#[allow(dead_code, unused_variables)]
 pub async fn update_information(envelope: Envelope) {
     match envelope {
         // Ignore command, it's outgoing data only.

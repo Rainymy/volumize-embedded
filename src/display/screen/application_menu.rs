@@ -94,7 +94,7 @@ where
         .background(BinaryColor::On)
         .margin(Insets::new(1, 0, 0, 1))
         .radius_all(3)
-        .border(2, BinaryColor::On);
+        .border(1, BinaryColor::On);
 
     let _shadow = style.paint(display, area)?;
     Ok(())

@@ -193,11 +193,3 @@ where
 
     Ok(())
 }
-
-fn truncate_name(name: &str, max_chars: usize) -> String {
-    let mut out: String = String::new();
-    for c in name.chars().take(max_chars.max(1)) {
-        out.push(c);
-    }
-    out
-}

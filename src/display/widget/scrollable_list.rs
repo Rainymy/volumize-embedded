@@ -60,10 +60,10 @@ impl<'a, T> ScrollableList<'a, T> {
         self
     }
 
-    pub fn with_style(mut self, style: ListStyle) -> Self {
-        self.style = style;
-        self
-    }
+    // pub fn with_style(mut self, style: ListStyle) -> Self {
+    //     self.style = style;
+    //     self
+    // }
 
     fn total(&self) -> usize {
         self.items.len() + self.trailing_label.is_some() as usize
