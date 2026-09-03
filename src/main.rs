@@ -36,6 +36,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use shared_types::protocol::{Command, Envelope};
 
+#[allow(unused)]
 use crate::display::{
     Screen,
     adjust_volume::{RenderApplication, VolumeAdjustState},
@@ -114,7 +115,9 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let in_receiver = IN_CHANNEL.receiver();
 
     // Wait for connection.
+    info!("Waiting Connection");
     signal::wait_for_ready().await;
+    info!("Connection Established");
     OUT_CHANNEL
         .send(Envelope::Command(Command::GetPlaybackDevices))
         .await;

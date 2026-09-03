@@ -192,6 +192,7 @@ pub async fn get_devices() -> Vec<AudioDevice> {
     critical_section::with(|cs| DEVICES_LIST.borrow_ref(cs).to_vec())
 }
 
+#[allow(dead_code)]
 pub async fn populate_dummy_data() {
     critical_section::with(|cs| {
         use alloc::string::ToString;

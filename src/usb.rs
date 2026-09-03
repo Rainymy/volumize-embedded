@@ -1,14 +1,11 @@
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
 use defmt::info;
-use esp_hal::otg_fs::{Usb, asynch::Driver};
+use esp_alloc::export::enumset::__internal::EnumSetTypeRepr;
+use esp_hal::otg_fs::{Usb, asynch::Driver as OtgDriver};
 
-use crate::signal::notify_ready;
+use super::{IN_CHANNEL, OUT_CHANNEL, signal};
+use shared_types::{protocol::RawFrame, reader::read_frame};
 
-use super::{IN_CHANNEL, OUT_CHANNEL};
-use shared_types::protocol::{Envelope, read_frame};
+use embassy_usb::class::cdc_acm::{Receiver, Sender};
 
 #[embassy_executor::task]
 pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
@@ -33,7 +30,7 @@ pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
     config.serial_number = Some("VMZE:01");
 
     let mut builder = Builder::new(
-        Driver::new(usb, EP_OUT_BUFFER.init([0u8; 256]), OtgConfig::default()),
+        OtgDriver::new(usb, EP_OUT_BUFFER.init([0u8; 256]), OtgConfig::default()),
         config,
         CONFIG_DESC.init([0u8; 256]),
         BOS_DESC.init([0u8; 256]),
@@ -41,11 +38,8 @@ pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
         CONTROL_BUF.init([0u8; 64]),
     );
 
-    let mut class = CdcAcmClass::new(&mut builder, STATE.init(State::new()), 64);
+    let class = CdcAcmClass::new(&mut builder, STATE.init(State::new()), 64);
     let usb_device = builder.build();
-
-    class.wait_connection().await;
-    notify_ready();
 
     let (sender, receiver) = class.split();
 
@@ -54,18 +48,17 @@ pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
     spawner.spawn(usb_run_task(usb_device).unwrap());
 
     #[embassy_executor::task]
-    async fn usb_run_task(mut usb_device: UsbDevice<'static, Driver<'static>>) {
+    async fn usb_run_task(mut usb_device: UsbDevice<'static, OtgDriver<'static>>) {
         usb_device.run().await;
     }
 }
 
-use embassy_usb::class::cdc_acm::{Receiver, Sender};
-
 #[embassy_executor::task]
-async fn usb_receiver_task(mut receiver: Receiver<'static, Driver<'static>>) {
+async fn usb_receiver_task(mut receiver: Receiver<'static, OtgDriver<'static>>) {
     loop {
         receiver.wait_connection().await;
 
+        // let mut reader = UsbReader(&receiver);
         let raw_frame = match read_frame(&mut receiver).await {
             Ok(raw_frame) => raw_frame,
             Err(err) => {
@@ -74,50 +67,34 @@ async fn usb_receiver_task(mut receiver: Receiver<'static, Driver<'static>>) {
             }
         };
 
-        let payload = match decode_message(&raw_frame) {
+        let payload = match RawFrame::decode(&raw_frame) {
             Ok(payload) => payload,
             Err(error) => {
-                info!("Decode error: {}", error.as_str());
+                info!("Decode error: {}", error);
                 continue;
             }
         };
 
-        let hello = alloc::format!("{:?}", payload);
-        info!("{}", hello.as_str());
-
+        info!("{}", alloc::format!("{:?}", payload));
         IN_CHANNEL.send(payload).await;
     }
 }
 
 #[embassy_executor::task]
-async fn usb_sender_task(mut class: Sender<'static, Driver<'static>>) {
+async fn usb_sender_task(mut class: Sender<'static, OtgDriver<'static>>) {
     loop {
         class.wait_connection().await;
-        let frame = encode_message(OUT_CHANNEL.receive().await);
+        signal::notify_ready();
 
-        let mut chunks = frame.chunks(class.max_packet_size() as usize);
+        let envelope = OUT_CHANNEL.receive().await;
+        let frame = RawFrame::encode(&envelope).build();
+
+        let mut chunks = frame.chunks(class.max_packet_size().to_usize());
         while let Some(chunk) = chunks.next() {
             if let Err(err) = class.write_packet(&chunk).await {
                 defmt::warn!("Write error: {}", err);
                 break;
             }
-        }
-    }
-}
-
-fn decode_message(payload: &Vec<u8>) -> Result<Envelope, String> {
-    let data = payload.as_slice();
-    ciborium::from_reader(data).map_err(|e| e.to_string())
-}
-
-fn encode_message(envelope: Envelope) -> Vec<u8> {
-    use shared_types::protocol::encode_frame;
-
-    match encode_frame(&envelope) {
-        Ok(frame) => frame.build(),
-        Err(err) => {
-            defmt::warn!("Encode error: {}", err.as_str());
-            Vec::new()
         }
     }
 }

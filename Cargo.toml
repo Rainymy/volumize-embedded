@@ -3,11 +3,10 @@ name = "volumize-embedded"
 version = "0.1.0"
 authors = ["Rainymy <48211766+Rainymy@users.noreply.github.com>"]
 edition = "2024"
-rust-version = "1.88"
 license = "MIT"
 
 [dependencies]
-shared-types = { path = "./shared-types" }
+shared-types = { path = "./shared-types", features = ["usb", "defmt"] }
 
 # Hardware Abstraction Layer / Chip Support
 esp-hal                = { version = "~1.1.1", features = ["esp32s3", "defmt", "unstable"] }
@@ -20,14 +19,14 @@ usb-device  = { version = "0.3.2", features = ["defmt"] }
 usbd-serial = { version = "0.2.2" }
 
 # Async Runtime
-embassy-sync     = { version = "0.8.0",  features = [] }
+embassy-sync     = { version = "0.8.0" }
 embassy-executor = { version = "0.10.0", features = ["defmt"] }
 embassy-time     = { version = "0.5.0",  features = ["defmt"] }
 embassy-usb      = { version = "0.6.0",  features = ["defmt"] }
 embassy-futures  = { version = "0.1.2",  features = ["defmt"] }
 
 # Debugging / Logging
-defmt         = { version = "1.1.1" }
+defmt         = { version = "1.1.1",  features = ["alloc"] }
 esp-backtrace = { version = "0.19.0", features = ["esp32s3", "defmt", "panic-handler"] }
 esp-println   = { version = "0.17.0", features = ["esp32s3", "defmt-espflash"] }
 
@@ -49,7 +48,7 @@ display-interface = { version = "0.5.0" }
 # UI Framework
 # buoyant = "0.7.0"
 
-# For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
+# Fine tuning: https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]
 opt-level = "s"
 
