@@ -1,9 +1,8 @@
 use defmt::info;
-use esp_alloc::export::enumset::__internal::EnumSetTypeRepr;
 use esp_hal::otg_fs::{Usb, asynch::Driver as OtgDriver};
 
 use super::{IN_CHANNEL, OUT_CHANNEL, signal};
-use shared_types::{protocol::RawFrame, reader::read_frame};
+use shared_types::{info, protocol::RawFrame, reader::read_frame};
 
 use embassy_usb::class::cdc_acm::{Receiver, Sender};
 
@@ -26,8 +25,8 @@ pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
 
     let mut config = UsbConfig::new(0x1209, 0x0001);
     config.manufacturer = Some("Volumize");
-    config.product = Some("Volumize Hardware");
-    config.serial_number = Some("VMZE:01");
+    config.product = Some(info::PRODUCT);
+    config.serial_number = Some(info::SERIAL_NUMBER);
 
     let mut builder = Builder::new(
         OtgDriver::new(usb, EP_OUT_BUFFER.init([0u8; 256]), OtgConfig::default()),
@@ -89,7 +88,7 @@ async fn usb_sender_task(mut class: Sender<'static, OtgDriver<'static>>) {
         let envelope = OUT_CHANNEL.receive().await;
         let frame = RawFrame::encode(&envelope).build();
 
-        let mut chunks = frame.chunks(class.max_packet_size().to_usize());
+        let mut chunks = frame.chunks(class.max_packet_size() as usize);
         while let Some(chunk) = chunks.next() {
             if let Err(err) = class.write_packet(&chunk).await {
                 defmt::warn!("Write error: {}", err);
