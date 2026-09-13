@@ -1,7 +1,7 @@
 use defmt::info;
 use esp_hal::otg_fs::{Usb, asynch::Driver as OtgDriver};
 
-use super::{IN_CHANNEL, OUT_CHANNEL, signal};
+use super::{IN_CHANNEL, OUT_CHANNEL};
 use shared_types::{info, protocol::RawFrame, reader::read_frame};
 
 use embassy_usb::class::cdc_acm::{Receiver, Sender};
@@ -83,16 +83,25 @@ async fn usb_receiver_task(mut receiver: Receiver<'static, OtgDriver<'static>>) 
 async fn usb_sender_task(mut class: Sender<'static, OtgDriver<'static>>) {
     loop {
         class.wait_connection().await;
-        signal::notify_ready();
 
         let envelope = OUT_CHANNEL.receive().await;
         let frame = RawFrame::encode(&envelope).build();
 
-        let mut chunks = frame.chunks(class.max_packet_size() as usize);
-        while let Some(chunk) = chunks.next() {
+        let max_packet_size = class.max_packet_size() as usize;
+
+        for chunk in frame.chunks(max_packet_size) {
             if let Err(err) = class.write_packet(&chunk).await {
                 defmt::warn!("Write error: {}", err);
                 break;
+            }
+        }
+
+        // USB bulk transfers signal completion via a short packet (len < max_packet_size).
+        // If our last chunk happened to be exactly max_packet_size, the host can't tell
+        // the transfer ended, so we send a ZLP (zero-length packet) to force closure.
+        if frame.len().rem_euclid(max_packet_size) == 0 {
+            if let Err(err) = class.write_packet(&[]).await {
+                defmt::warn!("ZLP write error: {}", err);
             }
         }
     }
