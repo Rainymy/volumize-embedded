@@ -8,7 +8,7 @@ use embedded_graphics::{
 };
 use shared_types::{
     AudioApplication, AudioDevice, Identifier,
-    protocol::{Command, Envelope},
+    protocol::{Command, CommandRequest, Envelope},
 };
 
 use crate::{
@@ -74,9 +74,12 @@ pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEve
             state.value.next_clamped();
             let percentage = Percentage::from_int(state.value.value() as u32);
             OUT_CHANNEL
-                .send(Envelope::Command(Command::SetVolume {
-                    id: state.application.id.clone(),
-                    volume: percentage.to_float(),
+                .send(Envelope::Command(CommandRequest {
+                    id: 0,
+                    command: Command::SetVolume {
+                        id: state.application.id.clone(),
+                        volume: percentage.to_float(),
+                    },
                 }))
                 .await;
             Transition::Stay
@@ -85,9 +88,12 @@ pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEve
             state.value.prev_clamped();
             let percentage = Percentage::from_int(state.value.value() as u32);
             OUT_CHANNEL
-                .send(Envelope::Command(Command::SetVolume {
-                    id: state.application.id.clone(),
-                    volume: percentage.to_float(),
+                .send(Envelope::Command(CommandRequest {
+                    id: 0,
+                    command: Command::SetVolume {
+                        id: state.application.id.clone(),
+                        volume: percentage.to_float(),
+                    },
                 }))
                 .await;
             Transition::Stay
@@ -95,9 +101,12 @@ pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEve
         InputEvent::DoubleClick => {
             state.application.is_muted = !state.application.is_muted;
             OUT_CHANNEL
-                .send(Envelope::Command(Command::SetMute {
-                    id: state.application.id.clone(),
-                    mute: state.application.is_muted,
+                .send(Envelope::Command(CommandRequest {
+                    id: 0,
+                    command: Command::SetMute {
+                        id: state.application.id.clone(),
+                        mute: state.application.is_muted,
+                    },
                 }))
                 .await;
             Transition::Stay

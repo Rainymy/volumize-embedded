@@ -15,6 +15,7 @@ pub use screen::*;
 
 use alloc::vec::Vec;
 use alloc::{collections::BTreeMap, string::String};
+use shared_types::protocol::CommandResponse;
 use shared_types::{AudioVolume, ProcessInfo, SessionDirection, SessionType};
 
 use core::cell::RefCell;
@@ -61,7 +62,9 @@ fn find_application_device(app_id: AppIdentifier) -> Option<String> {
     })
 }
 
-fn update_response(response: Response) {
+fn update_response(response: CommandResponse) {
+    let CommandResponse { id: _id, response } = response;
+
     critical_section::with(|cs| match response {
         Response::Volume { id, volume } => match id {
             Identifier::App(app_id) => {
@@ -85,10 +88,10 @@ fn update_response(response: Response) {
                     .map(|item| item.volume = volume);
             }
         },
-        Response::ApplicationList { device_id, apps } => {
+        Response::ApplicationList { id, apps } => {
             let mut current = APPLICATIONS_ID_LIST.borrow_ref_mut(cs);
-            let _ = current.remove(&device_id);
-            current.insert(device_id, apps);
+            let _ = current.remove(&id);
+            current.insert(id, apps);
         }
         Response::Application(application) => {
             if let Some(device_id) = find_application_device(application.process.id) {
@@ -104,26 +107,31 @@ fn update_response(response: Response) {
                 current.insert(device_id, new_list);
             }
         }
-        Response::Icon { app_id, data } => {
-            let device_id = find_application_device(app_id).unwrap_or_default();
+        Response::Icon { id, data: _data } => match id {
+            Identifier::App(app_id) => {
+                let device_id = find_application_device(app_id).unwrap_or_default();
 
-            let mut current = APPLICATIONS_LIST.borrow_ref_mut(cs);
-            let current = current
-                .iter_mut()
-                .find(|item| item.0 == &device_id)
-                .map(|item| item.1.iter_mut().find(|app| app.process.id == app_id))
-                .flatten();
+                let mut current = APPLICATIONS_LIST.borrow_ref_mut(cs);
+                let current = current
+                    .iter_mut()
+                    .find(|item| item.0 == &device_id)
+                    .map(|item| item.1.iter_mut().find(|app| app.process.id == app_id))
+                    .flatten();
 
-            if let Some(app) = current {
-                app.process.path = Some(data);
+                if let Some(_app) = current {
+                    // app.process.path = Some(data);
+                }
             }
-        }
+            Identifier::Device(_) => {}
+        },
         Response::DeviceList(device_list) => {
             DEVICES_LIST.replace_with(cs, |_old| device_list);
         }
-        Response::Error { message, request } => {
-            let text = format!("Error: {} (request: {:?})", message.as_str(), request);
-            defmt::error!("{}", text.as_str());
+        Response::ACK => {
+            defmt::info!("ACK received");
+        }
+        Response::Error { message } => {
+            defmt::error!("{}", format!("Error: {}", message));
         }
     });
 }
@@ -186,6 +194,10 @@ pub async fn get_device_by_id(device_id: Option<DeviceIdentifier>) -> Option<Aud
         }
         None => get_default_device().await,
     }
+}
+
+pub fn is_waiting_for_data() -> bool {
+    critical_section::with(|cs| DEVICES_LIST.borrow_ref(cs).len() == 0)
 }
 
 pub async fn get_devices() -> Vec<AudioDevice> {
