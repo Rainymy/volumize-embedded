@@ -34,8 +34,9 @@ pub use input::{ButtonTracker, InputEvent, RotaryTracker, RotationEvent};
 esp_bootloader_esp_idf::esp_app_desc!();
 
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
-use shared_types::protocol::{Command, Envelope};
+use shared_types::protocol::Envelope;
 
+use crate::display::wait_for_data::WaitForDataState;
 #[allow(unused)]
 use crate::display::{
     Screen,
@@ -46,8 +47,6 @@ use crate::display::{
 
 pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
 pub static IN_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
-
-mod signal;
 
 #[esp_rtos::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
@@ -102,25 +101,16 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut rotary_tracker = RotaryTracker::default();
 
     // Populate dummy data to simulate applications.
-    populate_dummy_data().await;
+    // populate_dummy_data().await;
 
     let application = get_applications(None).await;
     let application_count = application.len();
 
     let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count, None));
-    let _application_state = VolumeAdjustState::new(30, RenderApplication::from(&application[0]));
-
     let mut ui_state = display::UIState::new(root_screen);
-    ui_state.push(Screen::VolumeAdjust(_application_state));
-    let in_receiver = IN_CHANNEL.receiver();
 
-    // Wait for connection.
-    info!("Waiting Connection");
-    signal::wait_for_ready().await;
-    info!("Connection Established");
-    OUT_CHANNEL
-        .send(Envelope::Command(Command::GetPlaybackDevices))
-        .await;
+    ui_state.push(Screen::WaitingForData(WaitForDataState::default()));
+    let in_receiver = IN_CHANNEL.receiver();
 
     info!("Entering main loop");
     loop {

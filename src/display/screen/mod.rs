@@ -3,15 +3,17 @@ pub mod application_menu;
 pub mod settings;
 pub mod system_menu;
 pub mod ui_state;
+pub mod wait_for_data;
 
 use adjust_volume::{VolumeAdjustState, handle_volume_adjust};
 use application_menu::{ApplicationMenuState, handle_main_menu};
 use settings::{SettingsState, handle_settings};
 use system_menu::{SystemMenuState, handle_system_menu};
+use wait_for_data::handle_wait_for_data;
 
 pub use ui_state::UIState;
 
-use crate::InputEvent;
+use crate::{InputEvent, display::wait_for_data::WaitForDataState};
 
 pub enum Transition {
     Stay,         // event handled, no navigation change
@@ -26,6 +28,7 @@ pub enum Screen {
     SystemMenu(SystemMenuState),
     VolumeAdjust(VolumeAdjustState),
     Settings(SettingsState),
+    WaitingForData(WaitForDataState),
 }
 
 pub async fn handle_event(ui_state: &mut UIState, event: InputEvent) {
@@ -34,6 +37,7 @@ pub async fn handle_event(ui_state: &mut UIState, event: InputEvent) {
         Screen::VolumeAdjust(state) => handle_volume_adjust(state, event).await,
         Screen::Settings(state) => handle_settings(state, event).await,
         Screen::SystemMenu(state) => handle_system_menu(state, event).await,
+        Screen::WaitingForData(state) => handle_wait_for_data(state, event).await,
     };
 
     match transition {

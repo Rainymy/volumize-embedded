@@ -31,6 +31,7 @@ where
             Screen::Settings(state) => screen::settings::render(self, state).await,
             Screen::VolumeAdjust(state) => screen::adjust_volume::render(self, state).await,
             Screen::SystemMenu(state) => screen::system_menu::render(self, state).await,
+            Screen::WaitingForData(state) => screen::wait_for_data::render(self, state).await,
         }
         .map_err(|_| 400u16)?;
 

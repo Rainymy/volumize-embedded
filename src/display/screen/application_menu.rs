@@ -125,7 +125,7 @@ where
     let window = render_state
         .chunks(window_size)
         .nth(chunk_index)
-        .expect("selected index out of bounds");
+        .unwrap_or_default();
 
     for (i, (area, render)) in allocated_area.iter().zip(window).enumerate() {
         let absolute_index = chunk_index.saturating_mul(window_size).saturating_add(i);
