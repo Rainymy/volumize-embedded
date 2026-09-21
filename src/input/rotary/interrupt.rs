@@ -1,93 +1,86 @@
-use core::cell::{Cell, RefCell};
+use core::cell::RefCell;
+use core::ops::Div;
+use core::sync::atomic::{AtomicI32, Ordering};
 
 use critical_section::Mutex;
-use esp_hal::gpio::{AnyPin, Input};
+use esp_hal::gpio::{AnyPin, Input, InputConfig, Pull};
+use esp_hal::pcnt::{Pcnt, channel, unit};
+use esp_hal::peripherals::PCNT;
 
-#[derive(Debug, Clone, Copy)]
-struct RotaryType(pub u8);
-impl RotaryType {
-    pub fn value(&self) -> u8 {
-        self.0
-    }
+const COUNTS_PER_DETENT: i16 = 4;
+const LIMIT: i16 = 1000; // This value is arbitrary
 
-    pub fn wrapping_add(&self, other: u8) -> Self {
-        RotaryType(self.0.wrapping_add(other))
-    }
+type UnitRef = Mutex<RefCell<Option<unit::Unit<'static, 1>>>>;
 
-    pub fn wrapping_sub(&self, other: u8) -> Self {
-        RotaryType(self.0.wrapping_sub(other))
-    }
+static ROTARY_UNIT: UnitRef = Mutex::new(RefCell::new(None));
+static POSITION_CARRY: AtomicI32 = AtomicI32::new(0);
+
+pub fn init_rotary_interrupt(
+    pcnt: PCNT<'static>,
+    dt_pin: AnyPin<'static>,
+    clk_pin: AnyPin<'static>,
+) {
+    let pin_config = InputConfig::default().with_pull(Pull::Up);
+    let dt = Input::new(dt_pin, pin_config);
+    let clk = Input::new(clk_pin, pin_config);
+    let input_dt = dt.peripheral_input();
+    let input_clk = clk.peripheral_input();
+
+    let mut pcnt = Pcnt::new(pcnt);
+    pcnt.set_interrupt_handler(interrupt_handler);
+
+    let u0 = pcnt.unit1;
+    u0.set_low_limit(Some(-LIMIT)).unwrap();
+    u0.set_high_limit(Some(LIMIT)).unwrap();
+    u0.set_filter(Some(800)).unwrap();
+    u0.clear();
+
+    let ch0 = &u0.channel0;
+    ch0.set_ctrl_signal(input_dt.clone());
+    ch0.set_edge_signal(input_clk.clone());
+    ch0.set_ctrl_mode(channel::CtrlMode::Reverse, channel::CtrlMode::Keep);
+    ch0.set_input_mode(channel::EdgeMode::Increment, channel::EdgeMode::Decrement);
+
+    let ch1 = &u0.channel1;
+    ch1.set_ctrl_signal(input_clk);
+    ch1.set_edge_signal(input_dt);
+    ch1.set_ctrl_mode(channel::CtrlMode::Reverse, channel::CtrlMode::Keep);
+    ch1.set_input_mode(channel::EdgeMode::Decrement, channel::EdgeMode::Increment);
+
+    u0.listen();
+    u0.resume();
+
+    critical_section::with(|cs| ROTARY_UNIT.borrow_ref_mut(cs).replace(u0));
 }
 
-// ================= State machine constants =================
-const R_START: u8 = 0x0;
-const R_CW_FINAL: u8 = 0x1;
-const R_CW_BEGIN: u8 = 0x2;
-const R_CW_NEXT: u8 = 0x3;
-const R_CCW_BEGIN: u8 = 0x4;
-const R_CCW_FINAL: u8 = 0x5;
-const R_CCW_NEXT: u8 = 0x6;
-
-const DIR_CW: u8 = 0x10;
-const DIR_CCW: u8 = 0x20;
-
-const TRANSITION_TABLE: [[u8; 4]; 7] = [
-    // R_START
-    [R_START, R_CW_BEGIN, R_CCW_BEGIN, R_START],
-    // R_CW_FINAL
-    [R_CW_NEXT, R_START, R_CW_FINAL, R_START | DIR_CW],
-    // R_CW_BEGIN
-    [R_CW_NEXT, R_CW_BEGIN, R_START, R_START],
-    // R_CW_NEXT
-    [R_CW_NEXT, R_CW_BEGIN, R_CW_FINAL, R_START],
-    // R_CCW_BEGIN
-    [R_CCW_NEXT, R_START, R_CCW_BEGIN, R_START],
-    // R_CCW_FINAL
-    [R_CCW_NEXT, R_CCW_FINAL, R_START, R_START | DIR_CCW],
-    // R_CCW_NEXT
-    [R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START],
-];
-
-use super::PinRef;
-use super::is_interrupted;
-
-// Rotary state
-static ROT_STATE: Mutex<Cell<u8>> = Mutex::new(Cell::new(R_START));
-static COUNTER: Mutex<Cell<RotaryType>> = Mutex::new(Cell::new(RotaryType(0)));
-
-static DT_PIN: PinRef<Input<'static>> = Mutex::new(RefCell::new(None));
-static CLK_PIN: PinRef<Input<'static>> = Mutex::new(RefCell::new(None));
-
-pub fn init_rotary_interrupt(dt_pin: AnyPin<'static>, clk_pin: AnyPin<'static>) {
+#[esp_hal::handler]
+pub fn interrupt_handler() {
     critical_section::with(|cs| {
-        super::replace_pin_default(cs, &DT_PIN, dt_pin);
-        super::replace_pin_default(cs, &CLK_PIN, clk_pin);
+        let mut unit_ref = ROTARY_UNIT.borrow_ref_mut(cs);
+        if let Some(u0) = unit_ref.as_mut() {
+            if u0.interrupt_is_set() {
+                let events = u0.events();
+                if events.high_limit {
+                    POSITION_CARRY.fetch_add(LIMIT as i32, Ordering::SeqCst);
+                } else if events.low_limit {
+                    POSITION_CARRY.fetch_add(-(LIMIT as i32), Ordering::SeqCst);
+                }
+                u0.reset_interrupt();
+            }
+        }
     });
 }
 
-pub fn interrupt_handler(cs: critical_section::CriticalSection) {
-    if is_interrupted(cs, &DT_PIN) || is_interrupted(cs, &CLK_PIN) {
-        let dt = super::read_high_and_clear(cs, &DT_PIN) as u8;
-        let clk = super::read_high_and_clear(cs, &CLK_PIN) as u8;
-        let pin_state = (clk << 1) | dt;
+pub fn read_rotation_value() -> i16 {
+    let raw = critical_section::with(|cs| {
+        let unit_ref = ROTARY_UNIT.borrow_ref(cs);
+        match unit_ref.as_ref() {
+            Some(u0) => u0.counter.get(),
+            None => 0,
+        }
+    });
 
-        let state_cell = ROT_STATE.borrow(cs);
-        let old_state = state_cell.get() & 0xF;
-        let new_state = TRANSITION_TABLE[old_state as usize][pin_state as usize];
-        state_cell.set(new_state);
+    let position_carry = POSITION_CARRY.load(Ordering::SeqCst) as i16;
 
-        let result = new_state & 0x30;
-        let counter_cell = COUNTER.borrow(cs);
-
-        counter_cell.set(match result {
-            DIR_CW => counter_cell.get().wrapping_add(1),
-            DIR_CCW => counter_cell.get().wrapping_sub(1),
-            _ => counter_cell.get(),
-        });
-    }
-}
-
-/// Reading value is capped between [VALUE_MIN] - [VALUE_MAX]
-pub fn read_rotation_value() -> u8 {
-    critical_section::with(|cs| COUNTER.borrow(cs).get().value())
+    raw.wrapping_add(position_carry).div(COUNTS_PER_DETENT)
 }

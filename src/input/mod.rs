@@ -35,7 +35,6 @@ pub fn enable_gpio_interrupts() {
 
 extern "C" fn gpio_interrupt_handler() {
     critical_section::with(|cs| {
-        rotary::interrupt_handler(cs);
         button::interrupt_handler(cs);
     });
 }

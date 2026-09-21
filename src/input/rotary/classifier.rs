@@ -16,12 +16,11 @@ impl RotaryTracker {
         let delta = value.wrapping_sub(self.last_value);
         self.last_value = value;
 
-        if delta > 0 {
-            Some(InputEvent::Rotation(RotationEvent::Next))
-        } else if delta < 0 {
-            Some(InputEvent::Rotation(RotationEvent::Previous))
-        } else {
-            None
+        match delta {
+            0 => None,
+            _ if delta < 0 => Some(InputEvent::Rotation(RotationEvent::Previous)),
+            _ if delta > 0 => Some(InputEvent::Rotation(RotationEvent::Next)),
+            _ => unreachable!(),
         }
     }
 }

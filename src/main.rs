@@ -70,7 +70,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let btn_pin = peripherals.GPIO35.degrade();
 
     // Initialize interrupt handlers.
-    input::init_rotary_interrupt(dt_pin, clk_pin);
+    input::init_rotary_interrupt(peripherals.PCNT, dt_pin, clk_pin);
     input::init_button_interrupt(btn_pin);
     input::enable_gpio_interrupts();
     info!("Interrupt handlers initialized!");
