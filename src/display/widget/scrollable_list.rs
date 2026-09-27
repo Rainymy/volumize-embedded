@@ -1,9 +1,10 @@
 use alloc::{string::String, vec};
-use embedded_graphics::{pixelcolor::BinaryColor, prelude::*, primitives::Rectangle};
+use embedded_graphics::{prelude::*, primitives::Rectangle};
 
 use crate::display::{
     style::{Align, Flexbox, Insets, Style},
     text_style::TextStyle,
+    theme::{FromTheme, Theme, ThemeColor},
 };
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
@@ -11,47 +12,52 @@ pub struct ScrollState {
     offset: usize,
 }
 
-pub struct ListStyle {
-    pub normal: Style<BinaryColor>,
-    pub active: Style<BinaryColor>,
+pub struct ListStyle<Color: PixelColor> {
+    pub normal: Style<Color>,
+    pub active: Style<Color>,
 }
 
-impl Default for ListStyle {
-    fn default() -> Self {
-        let normal = Style::new(BinaryColor::On)
-            .color(BinaryColor::On)
+impl<Color: PixelColor + FromTheme> ListStyle<Color> {
+    pub fn new(theme: &Theme) -> Self {
+        let normal = Style::new()
+            .color_theme(theme, ThemeColor::Foreground)
             .margin(Insets::new(0, 0, 2, 2))
             .padding(Insets::all(2))
             .align(Align::Center);
 
         let active = normal
             .clone()
-            .color(BinaryColor::Off)
-            .background(BinaryColor::On)
+            .color_theme(theme, ThemeColor::Foreground)
+            .background_theme(theme, ThemeColor::Background)
             .radius_all(4)
             .margin(Insets::new(0, 0, 4, 4))
-            .border(2, BinaryColor::On);
+            .border_theme(theme, 2, ThemeColor::Muted);
 
         Self { normal, active }
     }
 }
 
-pub struct ScrollableList<'a, T> {
+pub struct ScrollableList<'a, T, Color: PixelColor> {
     items: &'a [T],
     label: fn(&T) -> &String,
     trailing_label: Option<&'a str>,
     window_size: usize,
-    style: ListStyle,
+    style: ListStyle<Color>,
 }
 
-impl<'a, T> ScrollableList<'a, T> {
-    pub fn new(items: &'a [T], label: fn(&T) -> &String, window_size: usize) -> Self {
+impl<'a, T, Color: PixelColor + FromTheme> ScrollableList<'a, T, Color> {
+    pub fn new(
+        items: &'a [T],
+        theme: &Theme,
+        label: fn(&T) -> &String,
+        window_size: usize,
+    ) -> Self {
         Self {
             items,
             label,
             trailing_label: None,
             window_size,
-            style: ListStyle::default(),
+            style: ListStyle::new(theme),
         }
     }
 
@@ -59,11 +65,6 @@ impl<'a, T> ScrollableList<'a, T> {
         self.trailing_label = Some(label);
         self
     }
-
-    // pub fn with_style(mut self, style: ListStyle) -> Self {
-    //     self.style = style;
-    //     self
-    // }
 
     fn total(&self) -> usize {
         self.items.len() + self.trailing_label.is_some() as usize
@@ -90,7 +91,8 @@ impl<'a, T> ScrollableList<'a, T> {
         selected: usize,
     ) -> Result<(), D::Error>
     where
-        D: DrawTarget<Color = BinaryColor> + OriginDimensions,
+        D: DrawTarget<Color = Color> + OriginDimensions,
+        D::Color: FromTheme,
     {
         self.update_offset(scroll, selected);
 
@@ -107,9 +109,9 @@ impl<'a, T> ScrollableList<'a, T> {
             };
 
             let (style, font_style) = if is_selected {
-                (self.style.active, TextStyle::BoldMedium.value())
+                (self.style.active, TextStyle::BoldMedium.value::<D::Color>())
             } else {
-                (self.style.normal, TextStyle::Medium.value())
+                (self.style.normal, TextStyle::Medium.value::<D::Color>())
             };
 
             let painted_area = style.paint(display, row_area)?;

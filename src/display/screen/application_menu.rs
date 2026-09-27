@@ -15,6 +15,7 @@ use crate::{
         screen::Transition,
         style::{Flexbox, Style},
         system_menu::SystemMenuState,
+        theme::Theme,
         util::WrappingInt,
         widget::rounded_rectangle,
     },
@@ -90,8 +91,9 @@ where
 {
     use crate::display::style::Insets;
 
-    let style = Style::new(BinaryColor::On)
+    let style = Style::new()
         .background(BinaryColor::On)
+        .color(BinaryColor::On)
         .margin(Insets::new(1, 0, 0, 1))
         .radius_all(3)
         .border(1, BinaryColor::On);
@@ -100,7 +102,11 @@ where
     Ok(())
 }
 
-pub async fn render<D>(display: &mut D, state: &mut ApplicationMenuState) -> Result<(), D::Error>
+pub async fn render<D>(
+    display: &mut D,
+    theme: &Theme,
+    state: &mut ApplicationMenuState,
+) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = BinaryColor> + OriginDimensions,
 {
@@ -133,7 +139,7 @@ where
             draw_shadow(display, *area)?;
         }
 
-        rounded_rectangle(display, *area, render.clone())?;
+        rounded_rectangle(display, *area, render.clone(), theme)?;
     }
 
     Ok(())

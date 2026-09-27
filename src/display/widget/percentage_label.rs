@@ -1,25 +1,24 @@
 use alloc::{format, string::String};
 use embedded_graphics::{
-    draw_target::DrawTarget, mono_font::MonoFont, pixelcolor::BinaryColor, primitives::Rectangle,
+    draw_target::DrawTarget, mono_font::MonoFont, pixelcolor::PixelColor, primitives::Rectangle,
 };
 
 use crate::display::{
     Percentage,
     style::{Align, Style},
+    theme::{FromTheme, Theme, ThemeColor},
 };
 
-pub struct PercentageLabel<'a> {
+pub struct PercentageLabel<'a, Color: PixelColor + FromTheme> {
     pub font: &'a MonoFont<'a>,
-    pub style: Style<BinaryColor>,
+    pub style: Style<Color>,
 }
 
-impl<'a> PercentageLabel<'a> {
-    pub fn new(font: &'a MonoFont<'a>) -> Self {
+impl<'a, Color: PixelColor + FromTheme> PercentageLabel<'a, Color> {
+    pub fn new(font: &'a MonoFont<'a>, theme: &Theme, token: ThemeColor) -> Self {
         Self {
             font,
-            style: Style::new(BinaryColor::On)
-                .background(BinaryColor::Off)
-                .align(Align::Center),
+            style: Style::new().color_theme(theme, token).align(Align::Center),
         }
     }
 
@@ -30,7 +29,8 @@ impl<'a> PercentageLabel<'a> {
         percentage: &Percentage,
     ) -> Result<(), D::Error>
     where
-        D: DrawTarget<Color = BinaryColor>,
+        D: DrawTarget<Color = Color>,
+        D::Color: FromTheme,
     {
         let area = self.style.paint(display, area)?;
         let text: String = format!("{:.1}%", percentage.to_percentage());

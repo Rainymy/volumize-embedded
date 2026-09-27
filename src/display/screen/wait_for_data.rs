@@ -3,7 +3,7 @@ use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::OriginDimensions,
     mono_font::ascii::{FONT_6X12, FONT_7X14},
-    pixelcolor::BinaryColor,
+    pixelcolor::PixelColor,
 };
 use shared_types::protocol::{Command, CommandRequest, Envelope};
 
@@ -12,6 +12,7 @@ use crate::{
     display::{
         Transition, is_waiting_for_data,
         style::{Align, Flexbox, Style},
+        theme::{FromTheme, Theme, ThemeColor},
     },
 };
 
@@ -51,16 +52,22 @@ pub async fn handle_wait_for_data(state: &mut WaitForDataState, event: InputEven
     }
 }
 
-pub async fn render<D>(display: &mut D, state: &mut WaitForDataState) -> Result<(), D::Error>
+pub async fn render<D, Color: PixelColor>(
+    display: &mut D,
+    theme: &Theme,
+    state: &mut WaitForDataState,
+) -> Result<(), D::Error>
 where
-    D: DrawTarget<Color = BinaryColor> + OriginDimensions,
+    D: DrawTarget<Color = Color> + OriginDimensions,
+    D::Color: FromTheme,
 {
     unsafe {
         TIME += 1;
     }
 
-    let style = Style::new(BinaryColor::On)
-        .border(1, BinaryColor::On)
+    let style = Style::new()
+        .color_theme(theme, ThemeColor::Foreground)
+        .border_theme(theme, 1, ThemeColor::Foreground)
         .align(Align::Center)
         .radius_all(4)
         .margin_all(4);

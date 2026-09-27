@@ -9,6 +9,8 @@ use embedded_graphics::{
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
 
+use crate::display::theme::{FromTheme, Theme, ThemeColor};
+
 use super::Bitmap;
 
 // ---------- Corners (per-corner radius, e.g. border-radius) ----------
@@ -108,27 +110,47 @@ impl Into<Alignment> for Align {
 }
 
 // ---------- Style ----------
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Style<Color: PixelColor> {
     pub margin: Insets,
     pub padding: Insets,
     pub background_color: Option<Color>,
-    pub foreground_color: Color,
+    pub foreground_color: Option<Color>,
     pub border: Option<Border<Color>>,
     pub radius: Corners,
     pub align: Align,
 }
 
+impl<Color: PixelColor + FromTheme> Style<Color> {
+    pub fn color_theme(mut self, theme: &Theme, token: ThemeColor) -> Self {
+        self.foreground_color = Some(Color::from_theme(theme, token));
+        self
+    }
+
+    pub fn background_theme(mut self, theme: &Theme, token: ThemeColor) -> Self {
+        self.background_color = Some(Color::from_theme(theme, token));
+        self
+    }
+
+    pub fn border_theme(mut self, theme: &Theme, width: u32, token: ThemeColor) -> Self {
+        self.border = Some(Border {
+            width,
+            color: Color::from_theme(theme, token),
+        });
+        self
+    }
+}
+
 impl<Color: PixelColor> Style<Color> {
-    pub fn new(foreground_color: Color) -> Self {
+    pub fn new() -> Self {
         Self {
             margin: Insets::default(),
             padding: Insets::default(),
             background_color: None,
-            foreground_color,
+            foreground_color: None,
             border: None,
             radius: Corners::default(),
-            align: Align::Start,
+            align: Align::default(),
         }
     }
 
@@ -158,7 +180,7 @@ impl<Color: PixelColor> Style<Color> {
     }
 
     pub fn color(mut self, color: Color) -> Self {
-        self.foreground_color = color;
+        self.foreground_color = Some(color);
         self
     }
 
@@ -209,11 +231,11 @@ impl<Color: PixelColor> Style<Color> {
     }
 
     /// Paints the style onto the given target, within the specified area.
-    pub fn paint<D: DrawTarget<Color = Color>>(
-        &self,
-        target: &mut D,
-        area: Rectangle,
-    ) -> Result<Rectangle, D::Error> {
+    pub fn paint<D>(&self, target: &mut D, area: Rectangle) -> Result<Rectangle, D::Error>
+    where
+        D: DrawTarget<Color = Color>,
+        D::Color: PixelColor,
+    {
         let bordered_area = shrink(area, &self.margin);
 
         let mut style_builder = PrimitiveStyleBuilder::new();
@@ -250,13 +272,17 @@ impl<Color: PixelColor> Style<Color> {
         Ok(content_area)
     }
 
-    pub fn draw_text<D: DrawTarget<Color = Color>>(
+    pub fn draw_text<D>(
         &self,
         target: &mut D,
         area: Rectangle,
         text: &str,
         font: &MonoFont,
-    ) -> Result<(), D::Error> {
+    ) -> Result<(), D::Error>
+    where
+        D: DrawTarget<Color = Color>,
+        D::Color: PixelColor,
+    {
         let topleftx = area.top_left.x;
         // Vertically center the text within the area.
         let anchor_y = area.top_left.y + area.size.height as i32 / 2;
@@ -271,7 +297,7 @@ impl<Color: PixelColor> Style<Color> {
             .baseline(Baseline::Middle)
             .build();
 
-        let char_style = MonoTextStyle::new(font, self.foreground_color);
+        let char_style = MonoTextStyle::new(font, self.foreground_color.expect("color is not set"));
         let location = Point::new(anchor_x, anchor_y);
 
         Text::with_text_style(text, location, char_style, text_style).draw(target)?;

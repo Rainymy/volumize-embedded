@@ -10,9 +10,9 @@ use ssd1306::{
     size::DisplaySizeAsync,
 };
 
-use crate::{
-    display::Screen,
-    display::{RenderDisplay, screen},
+use crate::display::{
+    RenderDisplay, Screen, screen,
+    theme::{FromTheme, Theme, ThemeColor},
 };
 
 impl<DI, SIZE> RenderDisplay for Ssd1306Async<DI, SIZE, BufferedGraphicsModeAsync<SIZE>>
@@ -21,17 +21,20 @@ where
     SIZE: DisplaySizeAsync,
     Self: DrawTarget<Color = BinaryColor>,
 {
-    async fn render(&mut self, screen: &mut Screen) -> Result<(), u16> {
-        if self.clear(BinaryColor::Off).is_err() {
+    async fn render(&mut self, screen: &mut Screen, theme: &Theme) -> Result<(), u16> {
+        let background = FromTheme::from_theme(theme, ThemeColor::Background);
+
+        if self.clear(background).is_err() {
             return Err(100);
         }
 
+        use screen::{adjust_volume, application_menu, settings, system_menu, wait_for_data};
         match screen {
-            Screen::ApplicationList(state) => screen::application_menu::render(self, state).await,
-            Screen::Settings(state) => screen::settings::render(self, state).await,
-            Screen::VolumeAdjust(state) => screen::adjust_volume::render(self, state).await,
-            Screen::SystemMenu(state) => screen::system_menu::render(self, state).await,
-            Screen::WaitingForData(state) => screen::wait_for_data::render(self, state).await,
+            Screen::ApplicationList(state) => application_menu::render(self, theme, state).await,
+            Screen::Settings(state) => settings::render(self, theme, state).await,
+            Screen::VolumeAdjust(state) => adjust_volume::render(self, theme, state).await,
+            Screen::SystemMenu(state) => system_menu::render(self, theme, state).await,
+            Screen::WaitingForData(state) => wait_for_data::render(self, theme, state).await,
         }
         .map_err(|_| 400u16)?;
 
@@ -51,7 +54,7 @@ where
     DI: AsyncWriteOnlyDataCommand,
     SIZE: TerminalDisplaySizeAsync,
 {
-    async fn render(&mut self, screen: &mut Screen) -> Result<(), u16> {
+    async fn render(&mut self, screen: &mut Screen, _theme: &Theme) -> Result<(), u16> {
         let value = match &screen {
             Screen::VolumeAdjust(volume) => volume.value.value(),
             Screen::ApplicationList(selected) => selected.selected.value(),

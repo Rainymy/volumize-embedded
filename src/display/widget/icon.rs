@@ -1,20 +1,24 @@
-use embedded_graphics::{draw_target::DrawTarget, pixelcolor::BinaryColor, primitives::Rectangle};
+use embedded_graphics::{draw_target::DrawTarget, pixelcolor::PixelColor, primitives::Rectangle};
 
-use crate::display::style::{Align, Bitmap, Style};
+use crate::display::{
+    style::{Align, Bitmap, Style},
+    theme::{FromTheme, Theme, ThemeColor},
+};
 
-pub struct IconWidget<'a> {
+pub struct IconWidget<'a, Color: PixelColor + FromTheme> {
     pub bitmap: Bitmap<'a>,
-    pub color: BinaryColor,
-    pub style: Style<BinaryColor>,
+    pub color: Color,
+    pub style: Style<Color>,
 }
 
-impl<'a> IconWidget<'a> {
-    pub fn new(bitmap: Bitmap<'a>, color: BinaryColor) -> Self {
+impl<'a, Color: PixelColor + FromTheme> IconWidget<'a, Color> {
+    pub fn new(bitmap: Bitmap<'a>, theme: &Theme, color: Color) -> Self {
         Self {
             bitmap,
             color,
-            style: Style::new(color.invert())
-                .background(color)
+            style: Style::new()
+                .background_theme(theme, ThemeColor::Background)
+                .color_theme(theme, ThemeColor::Foreground)
                 // .border(1, BinaryColor::On)
                 .align(Align::Center),
         }
@@ -22,11 +26,12 @@ impl<'a> IconWidget<'a> {
 
     pub fn render<D>(&self, display: &mut D, area: Rectangle) -> Result<(), D::Error>
     where
-        D: DrawTarget<Color = BinaryColor>,
+        D: DrawTarget<Color = Color>,
+        D::Color: FromTheme,
     {
         let area = self.style.paint(display, area)?;
         self.style
-            .draw_bitmap(display, area, &self.bitmap, self.color.invert(), None)?;
+            .draw_bitmap(display, area, &self.bitmap, self.color, None)?;
         Ok(())
     }
 }

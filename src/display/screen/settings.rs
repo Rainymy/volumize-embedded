@@ -3,13 +3,18 @@ use embedded_graphics::{
     Drawable,
     draw_target::DrawTarget,
     geometry::{OriginDimensions, Point},
-    pixelcolor::BinaryColor,
+    pixelcolor::PixelColor,
     text::Text,
 };
 
 use crate::{
     InputEvent, RotationEvent,
-    display::{screen::Transition, text_style::TextStyle, util::WrappingInt},
+    display::{
+        screen::Transition,
+        text_style::TextStyle,
+        theme::{FromTheme, Theme},
+        util::WrappingInt,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,9 +47,14 @@ pub async fn handle_settings(_state: &mut SettingsState, event: InputEvent) -> T
     }
 }
 
-pub async fn render<D>(display: &mut D, state: &mut SettingsState) -> Result<(), D::Error>
+pub async fn render<D, Color: PixelColor>(
+    display: &mut D,
+    _theme: &Theme,
+    state: &mut SettingsState,
+) -> Result<(), D::Error>
 where
-    D: DrawTarget<Color = BinaryColor> + OriginDimensions,
+    D: DrawTarget<Color = Color> + OriginDimensions,
+    D::Color: FromTheme,
 {
     let font_style = TextStyle::Small.value();
     let height = font_style.font.character_size.height;

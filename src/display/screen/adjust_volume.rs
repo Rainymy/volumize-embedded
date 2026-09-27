@@ -3,7 +3,7 @@ use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::{OriginDimensions, Size},
     mono_font::MonoTextStyle,
-    pixelcolor::BinaryColor,
+    pixelcolor::PixelColor,
     primitives::Rectangle,
 };
 use shared_types::{
@@ -18,6 +18,7 @@ use crate::{
         screen::Transition,
         style::{Align, Flexbox, Insets, Style},
         text_style::TextStyle,
+        theme::{FromTheme, Theme, ThemeColor},
         util::WrappingInt,
         widget::{SliderAlign, VerticalSlider},
     },
@@ -116,15 +117,21 @@ pub async fn handle_volume_adjust(state: &mut VolumeAdjustState, event: InputEve
     }
 }
 
-pub async fn render<D>(display: &mut D, state: &mut VolumeAdjustState) -> Result<(), D::Error>
+pub async fn render<D, Color: PixelColor + FromTheme>(
+    display: &mut D,
+    theme: &Theme,
+    state: &mut VolumeAdjustState,
+) -> Result<(), D::Error>
 where
-    D: DrawTarget<Color = BinaryColor> + OriginDimensions,
+    D: DrawTarget<Color = Color> + OriginDimensions,
+    D::Color: FromTheme,
 {
-    let style = Style::new(BinaryColor::Off)
-        .background(BinaryColor::Off)
+    let style = Style::new()
+        .background_theme(theme, ThemeColor::Background)
+        .color_theme(theme, ThemeColor::Foreground)
+        .border_theme(theme, 1, ThemeColor::Accent)
         .margin_all(2)
-        .radius_all(3)
-        .border(1, BinaryColor::On);
+        .radius_all(3);
 
     let allocated_area = style.paint(display, display.bounding_box())?;
 
@@ -134,14 +141,14 @@ where
     for (i, area) in flexbox_area.into_iter().enumerate() {
         match i {
             0 => {
-                let area_style = Style::new(BinaryColor::Off)
-                    .background(BinaryColor::Off)
-                    .color(BinaryColor::On)
+                let area_style = Style::new()
+                    .background_theme(theme, ThemeColor::Background)
+                    .color_theme(theme, ThemeColor::Foreground)
                     .margin(Insets::new(5, 0, 3, 7))
                     // .radius_all(3);
                     .radius_all(6);
 
-                let font_style = TextStyle::Medium.value();
+                let font_style = TextStyle::Medium.value::<D::Color>();
 
                 let area = area_style.paint(display, area)?;
                 let _area = area_style.draw_text(
@@ -152,12 +159,14 @@ where
                 )?;
             }
             1 => {
-                let style = Style::new(BinaryColor::On).margin(Insets::new(10, 5, 0, 5));
+                let style = Style::new()
+                    .color_theme(theme, ThemeColor::Foreground)
+                    .margin(Insets::new(10, 5, 0, 5));
                 let area = style.paint(display, area)?;
 
-                let font = embedded_graphics::mono_font::ascii::FONT_6X12;
-                let percentage = Percentage::from_int(state.value.value().cast_unsigned());
+                let font = TextStyle::Small.value::<D::Color>().font;
 
+                let percentage = Percentage::from_int(state.value.value().cast_unsigned());
                 let info = format!("{:.2}%", percentage.to_percentage());
 
                 let title_style = style.clone().align(Align::Center);
@@ -170,21 +179,21 @@ where
 
                 title_style.draw_text(display, title_rect, &info, &font)?;
 
-                VerticalSlider::default().render_labeled(
+                VerticalSlider::new(theme).render_labeled(
                     display,
                     area,
                     &percentage,
                     SliderAlign::Horizontal,
                     &info,
-                    MonoTextStyle::new(&font, BinaryColor::On),
+                    MonoTextStyle::new(&font, FromTheme::from_theme(theme, ThemeColor::Foreground)),
                 )?;
             }
             2 => {
-                let font = embedded_graphics::mono_font::ascii::FONT_6X12;
-                let style = Style::new(BinaryColor::Off)
-                    .background(BinaryColor::Off)
-                    .align(Align::Center)
-                    .color(BinaryColor::On);
+                let font = TextStyle::Small.value::<D::Color>().font;
+                let style = Style::new()
+                    .background_theme(theme, ThemeColor::Background)
+                    .color_theme(theme, ThemeColor::Foreground)
+                    .align(Align::Center);
                 let area = style.paint(display, area)?;
                 let muted_text = format!(
                     "{}",

@@ -1,10 +1,10 @@
 use embedded_graphics::geometry::Size;
-use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::{draw_target::DrawTarget, primitives::Rectangle};
 
 use crate::display::Percentage;
 use crate::display::adjust_volume::RenderApplication;
 use crate::display::style::{Align, Bitmap, Flexbox, Style};
+use crate::display::theme::{FromTheme, Theme, ThemeColor};
 use crate::display::widget::{
     IconWidget, MuteIndicator, PercentageLabel, SliderAlign, VerticalSlider,
 };
@@ -13,15 +13,18 @@ pub fn rounded_rectangle<D>(
     display: &mut D,
     area: Rectangle,
     render: RenderApplication,
+    theme: &Theme,
 ) -> Result<(), D::Error>
 where
-    D: DrawTarget<Color = BinaryColor>,
+    D: DrawTarget,
+    D::Color: FromTheme,
 {
-    let style = Style::new(BinaryColor::On)
+    let style = Style::<D::Color>::new()
         .padding_all(1)
         .margin_all(2)
-        .background(BinaryColor::Off)
-        .border(1, BinaryColor::On)
+        .background_theme(theme, ThemeColor::Background)
+        .color_theme(theme, ThemeColor::Foreground)
+        .border_theme(theme, 1, ThemeColor::Foreground)
         .radius_all(3)
         .align(Align::Center);
 
@@ -44,32 +47,50 @@ where
     for (i, area) in flex_area.into_iter().enumerate() {
         match i {
             0 => {
-                let element_style = Style::new(BinaryColor::On)
-                    .background(BinaryColor::Off)
+                let element_style = Style::new()
+                    .background_theme(&theme, ThemeColor::Background)
+                    .color_theme(&theme, ThemeColor::Foreground)
                     .align(Align::Center);
                 let area = element_style.paint(display, area)?;
                 element_style.draw_text(display, area, &render.name, &font_5x8)?
             }
             1 => {
                 let bitmap = Bitmap::new(&data, 16, 16);
-                IconWidget::new(bitmap, BinaryColor::Off).render(display, area)?
+                IconWidget::<D::Color>::new(
+                    bitmap,
+                    theme,
+                    D::Color::from_theme(&theme, ThemeColor::Foreground),
+                )
+                .render(display, area)?
             }
             2 => {
-                let style = Style::new(BinaryColor::On).align(Align::Center);
+                let style = Style::new()
+                    .color_theme(&theme, ThemeColor::Accent)
+                    .align(Align::Center);
 
                 let target_size = Size::new(10, area.size.height);
                 let area = style.align_element_x(area, target_size, Align::Center);
                 let area = style.paint(display, area)?;
 
-                VerticalSlider::default().render(
+                VerticalSlider::<D::Color>::new(theme).render(
                     display,
                     area,
                     &percentage,
                     SliderAlign::Vertical,
                 )?
             }
-            3 => PercentageLabel::new(&font_4x6).render(display, area, &percentage)?,
-            4 => MuteIndicator::new(&font_4x6).render(display, area, true)?,
+            3 => PercentageLabel::<D::Color>::new(&font_4x6, theme, ThemeColor::Accent).render(
+                display,
+                area,
+                &percentage,
+            )?,
+            4 => MuteIndicator::<D::Color>::new(
+                &font_4x6,
+                &theme,
+                ThemeColor::Background,
+                ThemeColor::Accent,
+            )
+            .render(display, area, true)?,
             _ => {}
         }
     }

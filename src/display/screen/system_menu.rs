@@ -1,5 +1,5 @@
 use embedded_graphics::{
-    draw_target::DrawTarget, geometry::OriginDimensions, pixelcolor::BinaryColor,
+    draw_target::DrawTarget, geometry::OriginDimensions, pixelcolor::PixelColor,
 };
 
 use crate::{
@@ -10,6 +10,7 @@ use crate::{
         application_menu::ApplicationMenuState,
         get_applications, get_devices,
         settings::SettingsState,
+        theme::{FromTheme, Theme},
         util::WrappingInt,
         widget::{ScrollState, ScrollableList},
     },
@@ -62,16 +63,22 @@ pub async fn handle_system_menu(state: &mut SystemMenuState, event: InputEvent) 
     }
 }
 
-pub async fn render<D>(display: &mut D, state: &mut SystemMenuState) -> Result<(), D::Error>
+pub async fn render<D, Color: PixelColor>(
+    display: &mut D,
+    theme: &Theme,
+    state: &mut SystemMenuState,
+) -> Result<(), D::Error>
 where
-    D: DrawTarget<Color = BinaryColor> + OriginDimensions,
+    D: DrawTarget<Color = Color> + OriginDimensions,
+    D::Color: FromTheme,
 {
     // items per window
     let window_size = 3;
 
     let devices = get_devices().await;
-    let scrollable = ScrollableList::new(&devices, |device| &device.friendly_name, window_size)
-        .with_trailing("Settings");
+    let scrollable =
+        ScrollableList::new(&devices, theme, |device| &device.friendly_name, window_size)
+            .with_trailing("Settings");
 
     scrollable.render(
         display,

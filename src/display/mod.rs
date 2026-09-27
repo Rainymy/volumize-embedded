@@ -3,6 +3,7 @@ mod percentage;
 mod render;
 mod screen;
 pub mod style;
+mod theme;
 mod util;
 mod widget;
 

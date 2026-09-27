@@ -2,7 +2,7 @@ use embedded_graphics::{
     draw_target::DrawTarget,
     geometry::{Point, Size},
     mono_font::MonoTextStyle,
-    pixelcolor::BinaryColor,
+    pixelcolor::PixelColor,
     primitives::Rectangle,
     text::{Alignment, Text, renderer::CharacterStyle},
 };
@@ -10,6 +10,7 @@ use embedded_graphics::{
 use crate::display::{
     Percentage,
     style::{Align, Corners, Style},
+    theme::{FromTheme, Theme, ThemeColor},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -18,32 +19,35 @@ pub enum SliderAlign {
     Horizontal,
 }
 
-pub struct VerticalSlider {
-    pub outer_style: Style<BinaryColor>,
-    pub inner_style_full: Style<BinaryColor>,
-    pub inner_style_partial: Style<BinaryColor>,
+pub struct VerticalSlider<Color: PixelColor + FromTheme> {
+    pub outer_style: Style<Color>,
+    pub inner_style_full: Style<Color>,
+    pub inner_style_partial: Style<Color>,
 }
 
-impl Default for VerticalSlider {
-    fn default() -> Self {
-        let outer_style = Style::new(BinaryColor::On)
+impl<Color: PixelColor + FromTheme> VerticalSlider<Color> {
+    pub fn new(theme: &Theme) -> Self {
+        let outer_style = Style::new()
             .margin_all(1)
             .padding_all(1)
-            .border(1, BinaryColor::On)
-            .background(BinaryColor::Off)
+            .background_theme(&theme, ThemeColor::Background)
+            .color_theme(&theme, ThemeColor::Background)
+            .border_theme(&theme, 1, ThemeColor::Foreground)
             .radius_all(3)
             .align(Align::Center);
 
-        let inner_style_full = Style::new(BinaryColor::On)
+        let inner_style_full = Style::new()
             .padding_all(1)
-            .background(BinaryColor::On)
-            .border(1, BinaryColor::On)
+            .background_theme(&theme, ThemeColor::Foreground)
+            .color_theme(&theme, ThemeColor::Background)
+            .border_theme(&theme, 1, ThemeColor::Foreground)
             .radius_all(3);
 
-        let inner_style_partial = Style::new(BinaryColor::On)
+        let inner_style_partial = Style::new()
             .padding_all(1)
-            .background(BinaryColor::On)
-            .border(1, BinaryColor::On)
+            .background_theme(&theme, ThemeColor::Foreground)
+            .color_theme(&theme, ThemeColor::Background)
+            .border_theme(&theme, 1, ThemeColor::Foreground)
             .radius(Corners::new(0, 0, 3, 3));
 
         Self {
@@ -52,9 +56,7 @@ impl Default for VerticalSlider {
             inner_style_partial,
         }
     }
-}
 
-impl VerticalSlider {
     pub fn render<D>(
         &self,
         display: &mut D,
@@ -63,7 +65,8 @@ impl VerticalSlider {
         align: SliderAlign,
     ) -> Result<(), D::Error>
     where
-        D: DrawTarget<Color = BinaryColor>,
+        D: DrawTarget<Color = Color>,
+        D::Color: PixelColor,
     {
         let area = {
             match align {
@@ -117,10 +120,11 @@ impl VerticalSlider {
         percentage: &Percentage,
         align: SliderAlign,
         label: &str,
-        label_style: MonoTextStyle<BinaryColor>,
+        label_style: MonoTextStyle<D::Color>,
     ) -> Result<(), D::Error>
     where
-        D: DrawTarget<Color = BinaryColor>,
+        D: DrawTarget<Color = Color>,
+        D::Color: FromTheme,
     {
         let area = {
             match align {
@@ -175,10 +179,11 @@ impl VerticalSlider {
         working_area: Rectangle,
         fill_area: Rectangle,
         text: &str,
-        style: MonoTextStyle<BinaryColor>,
+        style: MonoTextStyle<D::Color>,
     ) -> Result<(), D::Error>
     where
-        D: DrawTarget<Color = BinaryColor>,
+        D: DrawTarget<Color = Color>,
+        D::Color: FromTheme,
     {
         use embedded_graphics::Drawable;
         use embedded_graphics::draw_target::DrawTargetExt;
@@ -190,7 +195,12 @@ impl VerticalSlider {
         let label_bbox = probe.bounding_box();
 
         let mut inverted_style = style.clone();
-        inverted_style.set_text_color(style.text_color.map(|c| c.invert()));
+
+        inverted_style.set_text_color(
+            style
+                .text_color
+                .map(|_c| FromTheme::from_theme(&Theme::base(), ThemeColor::Background)),
+        );
         // inverted_style.set_background_color(style.text_color.map(|c| c.invert()));
 
         if let Some(covered) = clamp_intersection(label_bbox, fill_area) {
