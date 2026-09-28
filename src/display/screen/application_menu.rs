@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use embedded_graphics::{
-    draw_target::DrawTarget, geometry::OriginDimensions, pixelcolor::BinaryColor,
+    draw_target::DrawTarget, geometry::OriginDimensions, pixelcolor::PixelColor,
     primitives::Rectangle,
 };
 use shared_types::DeviceIdentifier;
@@ -15,7 +15,7 @@ use crate::{
         screen::Transition,
         style::{Flexbox, Style},
         system_menu::SystemMenuState,
-        theme::Theme,
+        theme::{FromTheme, Theme, ThemeColor},
         util::WrappingInt,
         widget::rounded_rectangle,
     },
@@ -85,30 +85,36 @@ pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEven
 }
 
 /// This is working so bad and wrong need to rework later
-fn draw_shadow<D>(display: &mut D, area: Rectangle) -> Result<(), D::Error>
+fn draw_shadow<D, Color: PixelColor>(
+    display: &mut D,
+    theme: &Theme,
+    area: Rectangle,
+) -> Result<(), D::Error>
 where
-    D: DrawTarget<Color = BinaryColor>,
+    D: DrawTarget<Color = Color>,
+    D::Color: FromTheme,
 {
     use crate::display::style::Insets;
 
     let style = Style::new()
-        .background(BinaryColor::On)
-        .color(BinaryColor::On)
+        .background_theme(theme, ThemeColor::Background)
+        .color_theme(theme, ThemeColor::Foreground)
+        .border_theme(theme, 1, ThemeColor::Accent)
         .margin(Insets::new(1, 0, 0, 1))
-        .radius_all(3)
-        .border(1, BinaryColor::On);
+        .radius_all(3);
 
     let _shadow = style.paint(display, area)?;
     Ok(())
 }
 
-pub async fn render<D>(
+pub async fn render<D, Color: PixelColor>(
     display: &mut D,
     theme: &Theme,
     state: &mut ApplicationMenuState,
 ) -> Result<(), D::Error>
 where
-    D: DrawTarget<Color = BinaryColor> + OriginDimensions,
+    D: DrawTarget<Color = Color> + OriginDimensions,
+    D::Color: FromTheme,
 {
     let device_id = state.device_id.clone();
 
@@ -136,7 +142,7 @@ where
     for (i, (area, render)) in allocated_area.iter().zip(window).enumerate() {
         let absolute_index = chunk_index.saturating_mul(window_size).saturating_add(i);
         if selected == absolute_index {
-            draw_shadow(display, *area)?;
+            draw_shadow(display, theme, *area)?;
         }
 
         rounded_rectangle(display, *area, render.clone(), theme)?;

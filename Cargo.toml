@@ -42,7 +42,9 @@ ciborium-io      = { version = "0.2.2",   default-features = false }
 # Display & Graphics
 embedded-graphics = { version = "0.8.2" }
 embedded-hal      = { version = "1.0.0" }
+embedded-hal-bus  = { version = "0.3.0",  features = ["async"] }
 ssd1306           = { version = "0.10.0", features = ["async"] }
+lcd-async         = { version = "0.1.3",  features = ["defmt"] }
 display-interface = { version = "0.5.0" }
 
 # UI Framework

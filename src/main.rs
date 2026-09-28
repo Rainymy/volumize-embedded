@@ -13,6 +13,7 @@ use defmt::info;
 use esp_backtrace as _;
 use esp_println as _;
 
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use esp_hal::{
     Config as MCUConfig,
     clock::CpuClock,
@@ -20,7 +21,8 @@ use esp_hal::{
     i2c::master::{Config as I2cConfig, I2c},
     interrupt::software::SoftwareInterruptControl,
     otg_fs::Usb,
-    time::Instant,
+    spi::master::{Config as SpiConfig, Spi},
+    time::{Instant, Rate},
     timer::timg::TimerGroup,
 };
 
@@ -30,23 +32,34 @@ mod input;
 mod usb;
 
 pub use input::{ButtonTracker, InputEvent, RotaryTracker, RotationEvent};
-
-esp_bootloader_esp_idf::esp_app_desc!();
-
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use shared_types::protocol::Envelope;
 
-use crate::display::wait_for_data::WaitForDataState;
 #[allow(unused)]
-use crate::display::{
+use display::{
     Screen,
     adjust_volume::{RenderApplication, VolumeAdjustState},
     application_menu::ApplicationMenuState,
     get_applications, populate_dummy_data, update_information,
+    wait_for_data::WaitForDataState,
 };
 
 pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
 pub static IN_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
+
+esp_bootloader_esp_idf::esp_app_desc!();
+
+esp_hal::assign_resources! {
+    Resources<'d> {
+        spi: DisplaySpi<'d> {
+             cs: GPIO8,
+             rst: GPIO18,
+             dc: GPIO17,
+             mosi: GPIO16,
+             clk: GPIO15,
+             miso: GPIO7,
+        }
+    }
+}
 
 #[esp_rtos::main]
 async fn main(spawner: embassy_executor::Spawner) -> ! {
@@ -57,6 +70,8 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let config = MCUConfig::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
     info!("CPU clock configured!");
+
+    let resource = split_resources!(peripherals);
 
     // Setup RTOS.
     let timg0 = TimerGroup::new(peripherals.TIMG0);
@@ -90,18 +105,36 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
         .with_sda(peripherals.GPIO5)
         .into_async();
 
+    let spi_config = SpiConfig::default().with_frequency(Rate::from_mhz(20));
+    let spi = defmt::expect!(Spi::new(peripherals.SPI2, spi_config))
+        .with_sck(resource.spi.clk)
+        .with_mosi(resource.spi.mosi)
+        .with_miso(resource.spi.miso)
+        .into_async();
+
+    let display = defmt::expect!(
+        init_display::init_spi_display(
+            spi,
+            resource.spi.cs.degrade(),
+            resource.spi.dc.degrade(),
+            resource.spi.rst.degrade(),
+        )
+        .await,
+        "Display SPI not initialized or Not Connected"
+    );
+
     // Initialize the display with I2C communication.
     info!("Initialize the display");
-    let display = defmt::expect!(
+    let display2 = defmt::expect!(
         init_display::init_display(i2c).await,
-        "Display not initialized or Not Connected"
+        "Display I2C not initialized or Not Connected"
     );
 
     let mut button_tracker = ButtonTracker::default();
     let mut rotary_tracker = RotaryTracker::default();
 
     // Populate dummy data to simulate applications.
-    // populate_dummy_data().await;
+    populate_dummy_data().await;
 
     let application = get_applications(None).await;
     let application_count = application.len();
@@ -109,7 +142,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count, None));
     let mut ui_state = display::UIState::new(root_screen);
 
-    ui_state.push(Screen::WaitingForData(WaitForDataState::default()));
+    // ui_state.push(Screen::WaitingForData(WaitForDataState::default()));
     let in_receiver = IN_CHANNEL.receiver();
 
     info!("Entering main loop");
@@ -141,8 +174,11 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             }
         }
 
+        if let Err(delay) = display::render(display2, ui_state.current_mut()).await {
+            info!("[display::render] 2 render error from render: {}", delay);
+        }
         if let Err(delay) = display::render(display, ui_state.current_mut()).await {
-            info!("render error from render: {}", delay);
+            info!("[display::render] render error from render: {}", delay);
         }
     }
 }

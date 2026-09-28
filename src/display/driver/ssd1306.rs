@@ -23,10 +23,7 @@ where
 {
     async fn render(&mut self, screen: &mut Screen, theme: &Theme) -> Result<(), u16> {
         let background = FromTheme::from_theme(theme, ThemeColor::Background);
-
-        if self.clear(background).is_err() {
-            return Err(100);
-        }
+        self.clear(background).map_err(|_| 100u16)?;
 
         use screen::{adjust_volume, application_menu, settings, system_menu, wait_for_data};
         match screen {
@@ -38,11 +35,7 @@ where
         }
         .map_err(|_| 400u16)?;
 
-        if self.flush().await.is_err() {
-            return Err(200);
-        }
-
-        Ok(())
+        self.flush().await.map_err(|_| 200u16)
     }
 }
 

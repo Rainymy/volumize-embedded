@@ -66,7 +66,8 @@ where
     }
 
     let style = Style::new()
-        .color_theme(theme, ThemeColor::Foreground)
+        .color_theme(theme, ThemeColor::Background)
+        .background_theme(theme, ThemeColor::Foreground)
         .border_theme(theme, 1, ThemeColor::Foreground)
         .align(Align::Center)
         .radius_all(4)
