@@ -18,7 +18,6 @@ use esp_hal::{
     Config as MCUConfig,
     clock::CpuClock,
     gpio::Pin,
-    i2c::master::{Config as I2cConfig, I2c},
     interrupt::software::SoftwareInterruptControl,
     otg_fs::Usb,
     spi::master::{Config as SpiConfig, Spi},
@@ -51,13 +50,18 @@ esp_bootloader_esp_idf::esp_app_desc!();
 esp_hal::assign_resources! {
     Resources<'d> {
         spi: DisplaySpi<'d> {
-             cs: GPIO8,
-             rst: GPIO18,
-             dc: GPIO17,
-             mosi: GPIO16,
-             clk: GPIO15,
-             miso: GPIO7,
-        }
+             cs: GPIO17,
+             rst: GPIO16,
+             dc: GPIO15,
+             mosi: GPIO7,
+             clk: GPIO6,
+             miso: GPIO5,
+        },
+        encoder: Encoder<'d> {
+            dt: GPIO2,
+            clk: GPIO1,
+            sw: GPIO42
+        },
     }
 }
 
@@ -69,9 +73,11 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     // Create peripherals and configure CPU clock.
     let config = MCUConfig::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
-    info!("CPU clock configured!");
 
     let resource = split_resources!(peripherals);
+    let encoder = resource.encoder;
+    let display_spi = resource.spi;
+    info!("CPU clock configured!");
 
     // Setup RTOS.
     let timg0 = TimerGroup::new(peripherals.TIMG0);
@@ -79,14 +85,13 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     info!("RTOS scheduler started!");
 
-    // Setup interrupt pins.
-    let dt_pin = peripherals.GPIO36.degrade();
-    let clk_pin = peripherals.GPIO40.degrade();
-    let btn_pin = peripherals.GPIO35.degrade();
-
     // Initialize interrupt handlers.
-    input::init_rotary_interrupt(peripherals.PCNT, dt_pin, clk_pin);
-    input::init_button_interrupt(btn_pin);
+    input::init_rotary_interrupt(
+        peripherals.PCNT,
+        encoder.dt.degrade(),
+        encoder.clk.degrade(),
+    );
+    input::init_button_interrupt(encoder.sw.degrade());
     input::enable_gpio_interrupts();
     info!("Interrupt handlers initialized!");
 
@@ -97,37 +102,23 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
         Err(e) => defmt::panic!("Failed to spawn usb task: {:?}", e),
     };
 
-    // Setup I2C communication.
-    info!("Setup I2C communication");
-    let i2c_config = I2cConfig::default();
-    let i2c = defmt::expect!(I2c::new(peripherals.I2C0, i2c_config), "I2C Failed")
-        .with_scl(peripherals.GPIO4)
-        .with_sda(peripherals.GPIO5)
-        .into_async();
-
+    // Setup SPI communication.
     let spi_config = SpiConfig::default().with_frequency(Rate::from_mhz(20));
     let spi = defmt::expect!(Spi::new(peripherals.SPI2, spi_config))
-        .with_sck(resource.spi.clk)
-        .with_mosi(resource.spi.mosi)
-        .with_miso(resource.spi.miso)
+        .with_sck(display_spi.clk)
+        .with_mosi(display_spi.mosi)
+        .with_miso(display_spi.miso)
         .into_async();
 
     let display = defmt::expect!(
         init_display::init_spi_display(
             spi,
-            resource.spi.cs.degrade(),
-            resource.spi.dc.degrade(),
-            resource.spi.rst.degrade(),
+            display_spi.cs.degrade(),
+            display_spi.dc.degrade(),
+            display_spi.rst.degrade(),
         )
         .await,
         "Display SPI not initialized or Not Connected"
-    );
-
-    // Initialize the display with I2C communication.
-    info!("Initialize the display");
-    let display2 = defmt::expect!(
-        init_display::init_display(i2c).await,
-        "Display I2C not initialized or Not Connected"
     );
 
     let mut button_tracker = ButtonTracker::default();
@@ -174,9 +165,6 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
             }
         }
 
-        if let Err(delay) = display::render(display2, ui_state.current_mut()).await {
-            info!("[display::render] 2 render error from render: {}", delay);
-        }
         if let Err(delay) = display::render(display, ui_state.current_mut()).await {
             info!("[display::render] render error from render: {}", delay);
         }
