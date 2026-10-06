@@ -1,10 +1,14 @@
 use defmt::info;
+use embassy_futures::select::{Either, select};
 use esp_hal::otg_fs::{Usb, asynch::Driver as OtgDriver};
 
 use super::{IN_CHANNEL, OUT_CHANNEL};
 use shared_types::{info, protocol::RawFrame, reader::read_frame};
 
-use embassy_usb::class::cdc_acm::{Receiver, Sender};
+use embassy_usb::{
+    class::cdc_acm::{Receiver, Sender},
+    driver::EndpointError,
+};
 
 #[embassy_executor::task]
 pub async fn usb_task(usb: Usb<'static>, spawner: embassy_executor::Spawner) {
@@ -57,7 +61,6 @@ async fn usb_receiver_task(mut receiver: Receiver<'static, OtgDriver<'static>>) 
     loop {
         receiver.wait_connection().await;
 
-        // let mut reader = UsbReader(&receiver);
         let raw_frame = match read_frame(&mut receiver).await {
             Ok(raw_frame) => raw_frame,
             Err(err) => {
@@ -82,27 +85,56 @@ async fn usb_receiver_task(mut receiver: Receiver<'static, OtgDriver<'static>>) 
 #[embassy_executor::task]
 async fn usb_sender_task(mut class: Sender<'static, OtgDriver<'static>>) {
     loop {
-        class.wait_connection().await;
-
-        let envelope = OUT_CHANNEL.receive().await;
-        let frame = RawFrame::encode(&envelope).build();
-
-        let max_packet_size = class.max_packet_size() as usize;
-
-        for chunk in frame.chunks(max_packet_size) {
-            if let Err(err) = class.write_packet(&chunk).await {
-                defmt::warn!("Write error: {}", err);
-                break;
+        // Disconnected: throw away anything the app produces until the host is back.
+        let drain = async {
+            loop {
+                let _ = OUT_CHANNEL.receive().await;
             }
+        };
+
+        match select(class.wait_connection(), drain).await {
+            Either::First(()) => {}         // connected
+            Either::Second(never) => never, // drain never completes
         }
 
-        // USB bulk transfers signal completion via a short packet (len < max_packet_size).
-        // If our last chunk happened to be exactly max_packet_size, the host can't tell
-        // the transfer ended, so we send a ZLP (zero-length packet) to force closure.
-        if frame.len().rem_euclid(max_packet_size) == 0 {
-            if let Err(err) = class.write_packet(&[]).await {
-                defmt::warn!("ZLP write error: {}", err);
+        defmt::info!("USB connected");
+
+        loop {
+            let envelope = OUT_CHANNEL.receive().await;
+            let frame = RawFrame::encode(&envelope).build();
+
+            match send_frame(&mut class, &frame).await {
+                Ok(_) => {}
+                Err(EndpointError::Disabled) => {
+                    defmt::info!("USB disconnected");
+                    break;
+                }
+                Err(EndpointError::BufferOverflow) => {
+                    // This should never happen unless `max_packet_size`
+                    // is larger than serial buffer size.
+                    defmt::warn!("[USB buffer overflow]: Should not happen");
+                }
             }
         }
     }
+}
+
+async fn send_frame(
+    class: &mut Sender<'static, OtgDriver<'static>>,
+    frame: &[u8],
+) -> Result<(), EndpointError> {
+    let mps = class.max_packet_size() as usize;
+
+    for chunk in frame.chunks(mps) {
+        class.write_packet(chunk).await?;
+    }
+
+    // USB bulk transfers signal completion via a short packet (len < max_packet_size).
+    // If our last chunk happened to be exactly max_packet_size, the host can't tell
+    // the transfer ended, so we send a ZLP (zero-length packet) to force closure.
+    if frame.len() % mps == 0 {
+        class.write_packet(&[]).await?;
+    }
+
+    Ok(())
 }
