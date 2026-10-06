@@ -10,7 +10,8 @@ use shared_types::protocol::{Command, CommandRequest, Envelope};
 use crate::{
     InputEvent, OUT_CHANNEL,
     display::{
-        Transition, is_waiting_for_data,
+        Transition,
+        store::is_waiting_for_data,
         style::{Align, Flexbox, Style},
         theme::{FromTheme, Theme, ThemeColor},
     },

@@ -11,8 +11,8 @@ use crate::{
     display::{
         Screen,
         adjust_volume::{RenderApplication, VolumeAdjustState},
-        get_applications, get_device_by_id, get_devices,
         screen::Transition,
+        store::{get_applications, get_device_by_id, get_devices},
         style::{Flexbox, Style},
         system_menu::SystemMenuState,
         theme::{FromTheme, Theme, ThemeColor},

@@ -38,9 +38,10 @@ use display::{
     Screen,
     adjust_volume::{RenderApplication, VolumeAdjustState},
     application_menu::ApplicationMenuState,
-    get_applications, populate_dummy_data, update_information,
     wait_for_data::WaitForDataState,
 };
+
+use crate::display::store::{dummy, get_applications, update_information};
 
 pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
 pub static IN_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
@@ -125,12 +126,12 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     let mut rotary_tracker = RotaryTracker::default();
 
     // Populate dummy data to simulate applications.
-    populate_dummy_data().await;
+    dummy::populate_dummy_data().await;
 
     let application = get_applications(None).await;
-    let application_count = application.len();
+    let state = ApplicationMenuState::new(application.len(), None);
 
-    let root_screen = Screen::ApplicationList(ApplicationMenuState::new(application_count, None));
+    let root_screen = Screen::ApplicationList(state);
     let mut ui_state = display::UIState::new(root_screen);
 
     // ui_state.push(Screen::WaitingForData(WaitForDataState::default()));
@@ -139,7 +140,7 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
     info!("Entering main loop");
     loop {
         if let Ok(envelope) = in_receiver.try_receive() {
-            update_information(envelope).await;
+            update_information(envelope);
         };
 
         let value = input::read_rotation_value();
