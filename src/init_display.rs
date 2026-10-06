@@ -83,7 +83,5 @@ where
     F: FnOnce() -> Fut,
     Fut: Future<Output = Option<T>>,
 {
-    defmt::info!("init_and_store: ");
-    let value = init().await?;
-    Some(cell.init(value))
+    Some(cell.init(init().await?))
 }

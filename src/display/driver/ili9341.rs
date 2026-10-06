@@ -43,8 +43,6 @@ impl RenderDisplay for Ili9341DisplayType {
         }
         .map_err(|_| 400u16)?;
 
-        defmt::info!("New Frame");
-
         self.show_raw_data(0, 0, WIDTH as u16, HEIGHT as u16, buffer.as_bytes())
             .await
             .map_err(|_| 100u16)

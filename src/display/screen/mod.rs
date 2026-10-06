@@ -22,12 +22,12 @@ pub enum Transition {
     Ignored,      // event didn't apply here (optional, same as Stay)
 }
 
-#[derive(Debug, Clone)]
 pub enum Screen {
     ApplicationList(ApplicationMenuState),
     SystemMenu(SystemMenuState),
     VolumeAdjust(VolumeAdjustState),
     Settings(SettingsState),
+    #[allow(dead_code)]
     WaitingForData(WaitForDataState),
 }
 
