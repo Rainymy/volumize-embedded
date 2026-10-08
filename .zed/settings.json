@@ -2,6 +2,9 @@
    "lsp": {
       "rust-analyzer": {
          "initialization_options": {
+            "check": {
+               "command": "clippy",
+            },
             "cargo": {
                "allTargets": false,
                "target": "xtensa-esp32s3-none-elf",
