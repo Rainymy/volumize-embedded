@@ -13,6 +13,7 @@ use defmt::info;
 use esp_backtrace as _;
 use esp_println as _;
 
+use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use esp_hal::{
     Config as MCUConfig,
@@ -21,7 +22,7 @@ use esp_hal::{
     interrupt::software::SoftwareInterruptControl,
     otg_fs::Usb,
     spi::master::{Config as SpiConfig, Spi},
-    time::{Instant, Rate},
+    time::Rate,
     timer::timg::TimerGroup,
 };
 
@@ -30,18 +31,15 @@ mod init_display;
 mod input;
 mod usb;
 
-pub use input::{ButtonTracker, InputEvent, RotaryTracker, RotationEvent};
+use input::{ButtonTracker, RotaryTracker};
+pub use input::{InputEvent, RotationEvent};
 use shared_types::protocol::Envelope;
 
-#[allow(unused)]
+use display::store::{self, dummy, get_applications, update_information};
 use display::{
-    Screen,
-    adjust_volume::{RenderApplication, VolumeAdjustState},
-    application_menu::ApplicationMenuState,
-    wait_for_data::WaitForDataState,
+    Screen, UIState, application_menu::ApplicationMenuState, wait_for_data::WaitForDataState,
 };
-
-use crate::display::store::{dummy, get_applications, update_information};
+use init_display::Ili9341DisplayType;
 
 pub static OUT_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
 pub static IN_CHANNEL: Channel<CriticalSectionRawMutex, Envelope, 16> = Channel::new();
@@ -50,7 +48,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 
 esp_hal::assign_resources! {
     Resources<'d> {
-        spi: DisplaySpi<'d> {
+        d_spi: DisplaySpi<'d> {
              cs: GPIO17,
              rst: GPIO16,
              dc: GPIO15,
@@ -67,26 +65,45 @@ esp_hal::assign_resources! {
 }
 
 #[esp_rtos::main]
-async fn main(spawner: embassy_executor::Spawner) -> ! {
+async fn main(spawner: Spawner) -> ! {
     esp_alloc::heap_allocator!(size: 3 * 32 * 1024);
     info!("Embassy initialized!");
 
-    // Create peripherals and configure CPU clock.
+    let display = init_hardware(spawner).await;
+
+    // Populate dummy data to simulate applications.
+    dummy::populate_dummy_data().await;
+
+    let mut ui_state = build_initial_ui().await;
+    let mut inputs = InputPoller::default();
+    let in_receiver = IN_CHANNEL.receiver();
+
+    info!("Entering main loop");
+    loop {
+        while let Ok(envelope) = in_receiver.try_receive() {
+            update_information(envelope);
+        }
+
+        inputs.dispatch(&mut ui_state).await;
+
+        if let Err(code) = display::render(display, ui_state.current_mut()).await {
+            info!("[display::render] render error: {}", code);
+        }
+    }
+}
+
+async fn init_hardware(spawner: Spawner) -> &'static mut Ili9341DisplayType {
     let config = MCUConfig::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    let resource = split_resources!(peripherals);
-    let encoder = resource.encoder;
-    let display_spi = resource.spi;
+    let Resources { d_spi, encoder } = split_resources!(peripherals);
     info!("CPU clock configured!");
 
-    // Setup RTOS.
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     info!("RTOS scheduler started!");
 
-    // Initialize interrupt handlers.
     input::init_rotary_interrupt(
         peripherals.PCNT,
         encoder.dt.degrade(),
@@ -98,76 +115,62 @@ async fn main(spawner: embassy_executor::Spawner) -> ! {
 
     // USB CDC-ACM - Serial over USB
     let usb = Usb::new(peripherals.USB0, peripherals.GPIO20, peripherals.GPIO19);
-    match usb::usb_task(usb, spawner) {
-        Ok(task) => spawner.spawn(task),
-        Err(e) => defmt::panic!("Failed to spawn usb task: {:?}", e),
-    };
+    spawner.spawn(defmt::unwrap!(usb::usb_task(usb, spawner)));
 
-    // Setup SPI communication.
     let spi_config = SpiConfig::default().with_frequency(Rate::from_mhz(20));
     let spi = defmt::expect!(Spi::new(peripherals.SPI2, spi_config))
-        .with_sck(display_spi.clk)
-        .with_mosi(display_spi.mosi)
-        .with_miso(display_spi.miso)
+        .with_sck(d_spi.clk)
+        .with_mosi(d_spi.mosi)
+        .with_miso(d_spi.miso)
         .into_async();
 
-    let display = defmt::expect!(
+    defmt::expect!(
         init_display::init_spi_display(
             spi,
-            display_spi.cs.degrade(),
-            display_spi.dc.degrade(),
-            display_spi.rst.degrade(),
+            d_spi.cs.degrade(),
+            d_spi.dc.degrade(),
+            d_spi.rst.degrade(),
         )
         .await,
         "Display SPI not initialized or Not Connected"
-    );
+    )
+}
 
-    let mut button_tracker = ButtonTracker::default();
-    let mut rotary_tracker = RotaryTracker::default();
+async fn build_initial_ui() -> UIState {
+    let applications = get_applications(None).await;
+    let root = Screen::ApplicationList(ApplicationMenuState::new(applications.len(), None));
+    let mut ui_state = UIState::new(root);
 
-    // Populate dummy data to simulate applications.
-    dummy::populate_dummy_data().await;
+    if store::is_waiting_for_data() {
+        ui_state.push(Screen::WaitingForData(WaitForDataState::default()));
+    }
 
-    let application = get_applications(None).await;
-    let state = ApplicationMenuState::new(application.len(), None);
+    ui_state
+}
 
-    let root_screen = Screen::ApplicationList(state);
-    let mut ui_state = display::UIState::new(root_screen);
+#[derive(Default)]
+struct InputPoller {
+    button: ButtonTracker,
+    rotary: RotaryTracker,
+}
 
-    // ui_state.push(Screen::WaitingForData(WaitForDataState::default()));
-    let in_receiver = IN_CHANNEL.receiver();
-
-    info!("Entering main loop");
-    loop {
-        if let Ok(envelope) = in_receiver.try_receive() {
-            update_information(envelope);
-        };
-
-        let value = input::read_rotation_value();
-        if let Some(event) = rotary_tracker.poll(value as i16) {
+impl InputPoller {
+    async fn dispatch(&mut self, ui_state: &mut UIState) {
+        if let Some(event) = self.rotary.poll(input::read_rotation_value()) {
             info!("Rotary event: {}", event);
-            display::handle_event(&mut ui_state, event).await;
+            display::handle_event(ui_state, event).await;
         }
 
-        {
-            // These 2 calls work together to handle button edge and timeout events.
-            input::with_edge_queue(async |is_down, timestamp| {
-                if let Some(event) = button_tracker.on_edge(is_down, timestamp) {
-                    info!("Edge event: {}", event);
-                    display::handle_event(&mut ui_state, event).await;
-                }
-            })
-            .await;
-
-            let now_ms = Instant::now().duration_since_epoch().as_millis();
-            if let Some(button_state) = button_tracker.check_timeouts(now_ms) {
-                info!("Timeout event: {}", button_state);
-                display::handle_event(&mut ui_state, button_state).await;
+        for (is_down, timestamp) in input::take_edges() {
+            if let Some(event) = self.button.on_edge(is_down, timestamp) {
+                info!("Edge event: {}", event);
+                display::handle_event(ui_state, event).await;
             }
         }
 
-        if let Err(delay) = display::render(display, ui_state.current_mut()).await {
-            info!("[display::render] render error from render: {}", delay);
+        if let Some(event) = self.button.check_timeouts(input::now_ms()) {
+            info!("Timeout event: {}", event);
+            display::handle_event(ui_state, event).await;
         }
     }
 }

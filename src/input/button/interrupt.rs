@@ -21,10 +21,8 @@ pub fn init_button_interrupt(pin: AnyPin<'static>) {
 
 pub fn interrupt_handler(cs: critical_section::CriticalSection) {
     if super::is_interrupted(cs, &BUTTON) {
-        use esp_hal::time::Instant;
-
         let level = !super::read_high_and_clear(cs, &BUTTON);
-        let timestamp = Instant::now().duration_since_epoch().as_millis();
+        let timestamp = super::now_ms();
 
         let last_edge_ms = LAST_EDGE_MS.borrow(cs);
         let last_accepted_level = LAST_ACCEPTED_LEVEL.borrow(cs);
@@ -42,39 +40,6 @@ pub fn interrupt_handler(cs: critical_section::CriticalSection) {
     }
 }
 
-pub async fn with_edge_queue<F>(mut f: F)
-where
-    F: AsyncFnMut(bool, u64),
-{
-    async_critical_section(async |cs| {
-        let mut queue = EDGE_QUEUE.borrow_ref_mut(cs);
-        for (is_down, timestamp) in queue.iter() {
-            f(*is_down, *timestamp).await;
-        }
-        queue.clear();
-    })
-    .await;
-}
-
-/// This method is directly adapted from the [`critical_section::with`] function.
-pub async fn async_critical_section<F>(mut f: F)
-where
-    F: AsyncFnMut(critical_section::CriticalSection),
-{
-    use critical_section::{CriticalSection, RestoreState, acquire, release};
-    struct Guard {
-        state: RestoreState,
-    }
-
-    impl Drop for Guard {
-        #[inline(always)]
-        fn drop(&mut self) {
-            unsafe { release(self.state) }
-        }
-    }
-
-    let state = unsafe { acquire() };
-    let _guard = Guard { state };
-
-    f(unsafe { CriticalSection::new() }).await;
+pub fn take_edges() -> Vec<(bool, u64)> {
+    critical_section::with(|cs| core::mem::take(&mut *EDGE_QUEUE.borrow_ref_mut(cs)))
 }

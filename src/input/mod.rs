@@ -1,7 +1,7 @@
 mod button;
 mod rotary;
 
-pub use button::{ButtonTracker, init_button_interrupt, with_edge_queue};
+pub use button::{ButtonTracker, init_button_interrupt, take_edges};
 pub use rotary::{RotaryTracker, RotationEvent, init_rotary_interrupt, read_rotation_value};
 
 #[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
@@ -40,6 +40,13 @@ extern "C" fn gpio_interrupt_handler() {
 }
 
 // ==================== Helper functions =====================
+/// Milliseconds since boot, as used for button timestamps.
+pub fn now_ms() -> u64 {
+    esp_hal::time::Instant::now()
+        .duration_since_epoch()
+        .as_millis()
+}
+
 fn is_interrupted(cs: CriticalSection, pin: &PinRef<Input<'static>>) -> bool {
     let pin_ref = pin.borrow_ref(cs);
     match pin_ref.as_ref() {
