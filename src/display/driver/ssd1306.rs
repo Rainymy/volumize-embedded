@@ -11,7 +11,7 @@ use ssd1306::{
 };
 
 use crate::display::{
-    RenderDisplay, Screen, screen,
+    RenderDisplay, Screen,
     theme::{FromTheme, Theme, ThemeColor},
 };
 
@@ -25,15 +25,9 @@ where
         let background = FromTheme::from_theme(theme, ThemeColor::Background);
         self.clear(background).map_err(|_| 100u16)?;
 
-        use screen::{adjust_volume, application_menu, settings, system_menu, wait_for_data};
-        match screen {
-            Screen::ApplicationList(state) => application_menu::render(self, theme, state).await,
-            Screen::Settings(state) => settings::render(self, theme, state).await,
-            Screen::VolumeAdjust(state) => adjust_volume::render(self, theme, state).await,
-            Screen::SystemMenu(state) => system_menu::render(self, theme, state).await,
-            Screen::WaitingForData(state) => wait_for_data::render(self, theme, state).await,
-        }
-        .map_err(|_| 400u16)?;
+        super::render_screen_state(self, screen, theme)
+            .await
+            .map_err(|_| 400u16)?;
 
         self.flush().await.map_err(|_| 200u16)
     }
@@ -61,7 +55,7 @@ where
             LAST_VALUE = Some(value);
         }
 
-        let _ = self.clear();
+        let _ = self.clear().await;
 
         let digits = format!("volume: {}", value);
         info!("Volume: {}", value);
@@ -71,13 +65,17 @@ where
         // Instead, we write each character individually. Works around the issue.
         for c in digits.as_bytes() {
             let bind = &[*c];
-            let _ = self.write_str(unsafe { core::str::from_utf8_unchecked(bind) });
+            let _ = self
+                .write_str(unsafe { core::str::from_utf8_unchecked(bind) })
+                .await;
         }
-        let _ = self.set_position(0, 2);
+        let _ = self.set_position(0, 2).await;
 
         for c in 33..123 {
             let bind = &[c];
-            let _ = self.write_str(unsafe { core::str::from_utf8_unchecked(bind) });
+            let _ = self
+                .write_str(unsafe { core::str::from_utf8_unchecked(bind) })
+                .await;
         }
 
         Ok(())
