@@ -69,11 +69,9 @@ fn split(area: Rectangle, gap: i32, sizes: &[u32], axis: Axis) -> Vec<Rectangle>
     for &weight in sizes {
         cumulative_weight += weight;
 
-        let boundary = if total_weight == 0 {
-            0
-        } else {
-            (usable * cumulative_weight) / total_weight
-        };
+        let boundary = (usable * cumulative_weight)
+            .checked_div(total_weight)
+            .unwrap_or_default();
 
         let extent = boundary - prev_boundary;
         prev_boundary = boundary;

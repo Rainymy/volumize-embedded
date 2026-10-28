@@ -48,8 +48,8 @@ where
         match i {
             0 => {
                 let element_style = Style::new()
-                    .background_theme(&theme, ThemeColor::Background)
-                    .color_theme(&theme, ThemeColor::Foreground)
+                    .background_theme(theme, ThemeColor::Background)
+                    .color_theme(theme, ThemeColor::Foreground)
                     .align(Align::Center);
                 let area = element_style.paint(display, area)?;
                 element_style.draw_text(display, area, &render.name, &font_5x8)?
@@ -59,13 +59,13 @@ where
                 IconWidget::<D::Color>::new(
                     bitmap,
                     theme,
-                    D::Color::from_theme(&theme, ThemeColor::Foreground),
+                    D::Color::from_theme(theme, ThemeColor::Foreground),
                 )
                 .render(display, area)?
             }
             2 => {
                 let style = Style::new()
-                    .color_theme(&theme, ThemeColor::Accent)
+                    .color_theme(theme, ThemeColor::Accent)
                     .align(Align::Center);
 
                 let target_size = Size::new(10, area.size.height);
@@ -86,7 +86,7 @@ where
             )?,
             4 => MuteIndicator::<D::Color>::new(
                 &font_4x6,
-                &theme,
+                theme,
                 ThemeColor::Background,
                 ThemeColor::Accent,
             )

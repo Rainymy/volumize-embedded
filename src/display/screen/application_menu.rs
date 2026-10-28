@@ -56,10 +56,10 @@ pub async fn handle_main_menu(state: &mut ApplicationMenuState, event: InputEven
                 let device = get_device_by_id(state.device_id.clone()).await;
 
                 // Index 0 is the device entry, if a device is present.
-                if selected == 0 {
-                    if let Some(device) = &device {
-                        return Some(RenderApplication::from(device));
-                    }
+                if let Some(device) = &device
+                    && selected == 0
+                {
+                    return Some(RenderApplication::from(device));
                 }
 
                 let applications = get_applications(state.device_id.clone()).await;

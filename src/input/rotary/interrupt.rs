@@ -57,16 +57,16 @@ pub fn init_rotary_interrupt(
 pub fn interrupt_handler() {
     critical_section::with(|cs| {
         let mut unit_ref = ROTARY_UNIT.borrow_ref_mut(cs);
-        if let Some(u0) = unit_ref.as_mut() {
-            if u0.interrupt_is_set() {
-                let events = u0.events();
-                if events.high_limit {
-                    POSITION_CARRY.fetch_add(LIMIT as i32, Ordering::SeqCst);
-                } else if events.low_limit {
-                    POSITION_CARRY.fetch_add(-(LIMIT as i32), Ordering::SeqCst);
-                }
-                u0.reset_interrupt();
+        if let Some(u0) = unit_ref.as_mut()
+            && u0.interrupt_is_set()
+        {
+            let events = u0.events();
+            if events.high_limit {
+                POSITION_CARRY.fetch_add(LIMIT as i32, Ordering::SeqCst);
+            } else if events.low_limit {
+                POSITION_CARRY.fetch_add(-(LIMIT as i32), Ordering::SeqCst);
             }
+            u0.reset_interrupt();
         }
     });
 }

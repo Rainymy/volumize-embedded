@@ -26,7 +26,6 @@ impl<Color: PixelColor + FromTheme> ListStyle<Color> {
             .align(Align::Center);
 
         let active = normal
-            .clone()
             .color_theme(theme, ThemeColor::Foreground)
             .background_theme(theme, ThemeColor::Background)
             .radius_all(4)
@@ -115,7 +114,7 @@ impl<'a, T, Color: PixelColor + FromTheme> ScrollableList<'a, T, Color> {
             };
 
             let painted_area = style.paint(display, row_area)?;
-            style.draw_text(display, painted_area, &text, font_style.font)?;
+            style.draw_text(display, painted_area, text, font_style.font)?;
         }
 
         Ok(())

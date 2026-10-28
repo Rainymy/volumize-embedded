@@ -20,7 +20,7 @@ impl<'a> Bitmap<'a> {
     }
 
     fn bytes_per_row(&self) -> u32 {
-        (self.width + 7) / 8
+        (self.width + 7).div_ceil(8)
     }
 
     /// true = "on" bit, false = "off" bit.

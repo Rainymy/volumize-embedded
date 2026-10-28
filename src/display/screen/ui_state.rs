@@ -24,13 +24,13 @@ impl UIState {
 
     #[allow(dead_code)]
     pub fn current(&mut self) -> &Screen {
-        debug_assert!(self.stack.len() != 0, "Navigation stack is empty");
+        debug_assert!(!self.stack.is_empty(), "Navigation stack is empty");
         // It is safe to unwrap. The stack is never empty.
         self.stack.last().unwrap()
     }
 
     pub fn current_mut(&mut self) -> &mut Screen {
-        debug_assert!(self.stack.len() != 0, "Navigation stack is empty");
+        debug_assert!(!self.stack.is_empty(), "Navigation stack is empty");
         // It is safe to unwrap. The stack is never empty.
         self.stack.last_mut().unwrap()
     }

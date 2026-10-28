@@ -64,7 +64,7 @@ impl VolumeAdjustState {
     pub fn new(value: i32, application: RenderApplication) -> Self {
         Self {
             value: WrappingInt::new(value.min(0), 101),
-            application: application,
+            application,
         }
     }
 }
@@ -151,12 +151,7 @@ where
                 let font_style = TextStyle::Medium.value::<D::Color>();
 
                 let area = area_style.paint(display, area)?;
-                let _area = area_style.draw_text(
-                    display,
-                    area,
-                    &state.application.name,
-                    font_style.font,
-                )?;
+                area_style.draw_text(display, area, &state.application.name, font_style.font)?;
             }
             1 => {
                 let style = Style::new()
@@ -169,7 +164,7 @@ where
                 let percentage = Percentage::from_int(state.value.value().cast_unsigned());
                 let info = format!("{:.2}%", percentage.to_percentage());
 
-                let title_style = style.clone().align(Align::Center);
+                let title_style = style.align(Align::Center);
 
                 let title_area = area.top_left - font.character_size - Size::new(0, 4);
                 let title_rect = Rectangle::new(
@@ -177,7 +172,7 @@ where
                     Size::new(area.size.width + 50, area.size.height),
                 );
 
-                title_style.draw_text(display, title_rect, &info, &font)?;
+                title_style.draw_text(display, title_rect, &info, font)?;
 
                 VerticalSlider::new(theme).render_labeled(
                     display,
@@ -185,7 +180,7 @@ where
                     &percentage,
                     SliderAlign::Horizontal,
                     &info,
-                    MonoTextStyle::new(&font, FromTheme::from_theme(theme, ThemeColor::Foreground)),
+                    MonoTextStyle::new(font, FromTheme::from_theme(theme, ThemeColor::Foreground)),
                 )?;
             }
             2 => {
@@ -195,15 +190,12 @@ where
                     .color_theme(theme, ThemeColor::Foreground)
                     .align(Align::Center);
                 let area = style.paint(display, area)?;
-                let muted_text = format!(
-                    "{}",
-                    if state.application.is_muted {
-                        "Muted"
-                    } else {
-                        "Unmuted"
-                    }
-                );
-                style.draw_text(display, area, &muted_text, &font)?;
+                let muted_text = if state.application.is_muted {
+                    "Muted"
+                } else {
+                    "Unmuted"
+                };
+                style.draw_text(display, area, muted_text, font)?;
             }
             _ => {}
         }

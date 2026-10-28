@@ -132,7 +132,7 @@ async fn send_frame(
     // USB bulk transfers signal completion via a short packet (len < max_packet_size).
     // If our last chunk happened to be exactly max_packet_size, the host can't tell
     // the transfer ended, so we send a ZLP (zero-length packet) to force closure.
-    if frame.len() % mps == 0 {
+    if frame.len().is_multiple_of(mps) {
         class.write_packet(&[]).await?;
     }
 

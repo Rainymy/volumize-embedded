@@ -30,24 +30,24 @@ impl<Color: PixelColor + FromTheme> VerticalSlider<Color> {
         let outer_style = Style::new()
             .margin_all(1)
             .padding_all(1)
-            .background_theme(&theme, ThemeColor::Background)
-            .color_theme(&theme, ThemeColor::Background)
-            .border_theme(&theme, 1, ThemeColor::Foreground)
+            .background_theme(theme, ThemeColor::Background)
+            .color_theme(theme, ThemeColor::Background)
+            .border_theme(theme, 1, ThemeColor::Foreground)
             .radius_all(3)
             .align(Align::Center);
 
         let inner_style_full = Style::new()
             .padding_all(1)
-            .background_theme(&theme, ThemeColor::Foreground)
-            .color_theme(&theme, ThemeColor::Background)
-            .border_theme(&theme, 1, ThemeColor::Foreground)
+            .background_theme(theme, ThemeColor::Foreground)
+            .color_theme(theme, ThemeColor::Background)
+            .border_theme(theme, 1, ThemeColor::Foreground)
             .radius_all(3);
 
         let inner_style_partial = Style::new()
             .padding_all(1)
-            .background_theme(&theme, ThemeColor::Foreground)
-            .color_theme(&theme, ThemeColor::Background)
-            .border_theme(&theme, 1, ThemeColor::Foreground)
+            .background_theme(theme, ThemeColor::Foreground)
+            .color_theme(theme, ThemeColor::Background)
+            .border_theme(theme, 1, ThemeColor::Foreground)
             .radius(Corners::new(0, 0, 3, 3));
 
         Self {
@@ -194,7 +194,7 @@ impl<Color: PixelColor + FromTheme> VerticalSlider<Color> {
         let probe = Text::with_alignment(text, center, style, Alignment::Center);
         let label_bbox = probe.bounding_box();
 
-        let mut inverted_style = style.clone();
+        let mut inverted_style = style;
 
         inverted_style.set_text_color(
             style

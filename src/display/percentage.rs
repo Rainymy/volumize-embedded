@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(clippy::manual_clamp)]
 
 #[derive(Debug, Clone, Default, Copy, defmt::Format)]
 pub struct Percentage {
@@ -33,8 +34,7 @@ impl Percentage {
 
     /// Value is clamped to [MIN_VALUE] and [MAX_VALUE]
     pub fn increment_percentage(&mut self, amount: f32) {
-        let new_value = self.value + amount / 100.0;
-        self.value = new_value.min(Self::MAX_VALUE).max(Self::MIN_VALUE)
+        self.value = Self::clamp(self.value + amount / 100.0);
     }
 
     /// Resets to [MIN_VALUE] if the value reaches the maximum after incrementing
@@ -46,11 +46,11 @@ impl Percentage {
         }
     }
 
-    pub fn to_float(&self) -> f32 {
+    pub fn to_float(self) -> f32 {
         self.value
     }
 
-    pub fn to_percentage(&self) -> f32 {
+    pub fn to_percentage(self) -> f32 {
         self.value * 100.0
     }
 }

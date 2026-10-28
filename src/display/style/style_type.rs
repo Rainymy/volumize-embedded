@@ -99,9 +99,9 @@ pub enum Align {
     End,
 }
 
-impl Into<Alignment> for Align {
-    fn into(self) -> Alignment {
-        match self {
+impl From<Align> for Alignment {
+    fn from(value: Align) -> Self {
+        match value {
             Align::Start => Alignment::Left,
             Align::Center => Alignment::Center,
             Align::End => Alignment::Right,
